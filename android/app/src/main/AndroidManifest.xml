@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
+<<<<<<< HEAD
         android:label="microlearningapp"
+=======
+        android:label="microlearning_app"
+>>>>>>> 5c75a51c45f27e71b05fc9e6fbcc6261d69772e0
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

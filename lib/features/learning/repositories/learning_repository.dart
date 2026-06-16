@@ -138,6 +138,26 @@ class LearningRepository {
     }
   }
 
+  Future<List<LessonModel>> searchLessons({
+    required String query,
+  }) async {
+    try {
+      final response = await _supabase
+          .from('lessons')
+          .select()
+          .or('title.ilike.%$query%,description.ilike.%$query%,content.ilike.%$query%')
+          .limit(20);
+
+      final data = response as List<dynamic>;
+      return data
+          .map((row) => LessonModel.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e, st) {
+      debugPrint('searchLessons error: $e\n$st');
+      return [];
+    }
+  }
+
   Future<List<LessonModel>> _fetchFromSupabase({
     required String userUuid,
     required UserContextState ambientContext,

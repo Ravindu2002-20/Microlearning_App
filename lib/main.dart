@@ -5,19 +5,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/constants.dart';
 import 'core/services/session_manager.dart';
+import 'core/services/theme_service.dart';
 import 'features/auth/repositaries/auth_repository.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/login_registration_screen.dart';
 import 'core/widgets/main_app_shell.dart';
-
-
 
 // ─── Global Providers ───────────────────────────────────────────────────────
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(Supabase.instance.client);
 });
-
 
 // ─── Entry Point ────────────────────────────────────────────────────────────
 
@@ -41,11 +39,11 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
-      title: 'Context Adaptive Microlearning',
+      title: 'MicroLearn',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.dark,
+      themeMode: ref.watch(themeProvider),
       home: const _AppRouter(),
     );
   }
@@ -197,6 +195,4 @@ class _SplashLogoState extends State<_SplashLogo>
     );
   }
 }
-
-
 

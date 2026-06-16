@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/constants.dart';
+import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -919,6 +920,120 @@ class _SettingsSheet extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: AppColors.textSecondaryDark),
+          Consumer(
+            builder: (context, ref, _) {
+              final themeMode = ref.watch(themeProvider);
+              final isDark = themeMode == ThemeMode.dark;
+
+              return Container(
+                margin: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingLg,
+                  vertical: AppDimensions.spacingSm,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingLg,
+                  vertical: AppDimensions.spacingMd,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.primaryDark.withValues(alpha: 0.15)
+                            : AppColors.primaryLight.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+                      ),
+                      child: Icon(
+                        isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                        color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingMd),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Appearance',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? AppColors.textPrimaryDark
+                                  : AppColors.textPrimaryLight,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isDark ? 'Dark mode' : 'Light mode',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? AppColors.textSecondaryDark
+                                  : AppColors.textSecondaryLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => ref.read(themeProvider.notifier).toggle(),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        width: 50,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: isDark ? AppColors.primaryGradientLight : null,
+                          color: isDark
+                              ? null
+                              : AppColors.textSecondaryLight.withValues(alpha: 0.2),
+                        ),
+                        child: AnimatedAlign(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOut,
+                          alignment:
+                              isDark ? Alignment.centerRight : Alignment.centerLeft,
+                          child: Container(
+                            margin: const EdgeInsets.all(3),
+                            width: 22,
+                            height: 22,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isDark
+                                  ? Icons.nights_stay_rounded
+                                  : Icons.wb_sunny_rounded,
+                              size: 12,
+                              color: isDark
+                                  ? AppColors.primaryDark
+                                  : const Color(0xFFF59E0B),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           ...settings.map((item) => _SettingsTile(item: item)),
           const SizedBox(height: AppDimensions.spacingSm),
         ],

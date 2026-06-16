@@ -10,8 +10,8 @@ class AppColors {
 
   // ── Core Palette ──────────────────────────────────────────────────────────
 
-  static const Color primaryLight = Color(0xFF5B5FFF);
-  static const Color secondaryLight = Color(0xFF00D4FF);
+  static const Color primaryLight = Color(0xFF6B51EF);
+  static const Color secondaryLight = Color(0xFF00C4D8);
   static const Color primaryDark = Color(0xFF7B61FF);
   static const Color secondaryDark = Color(0xFF00E5FF);
 
@@ -22,8 +22,8 @@ class AppColors {
   // ── Light Mode ────────────────────────────────────────────────────────────
 
   static const Color backgroundLight = Color(0xFFFFFFFF);
-  static const Color surfaceLight = Color(0xFFF7F8FC);
-  static const Color textPrimaryLight = Color(0xFF111827);
+  static const Color surfaceLight = Color(0xFFF5F5F8);
+  static const Color textPrimaryLight = Color(0xFF0A0A0F);
   static const Color textSecondaryLight = Color(0xFF6B7280);
 
   // ── Dark Mode ─────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ class AppColors {
 
   static const Color accentMotion = Color(0xFF00D4FF); // Cyan – walking/motion
   static const Color accentStationary = Color(0xFF7B61FF); // Purple – stationary
-  static const Color accentStrongNetwork = Color(0xFF5B5FFF); // Indigo
+  static const Color accentStrongNetwork = Color(0xFF6B51EF); // Indigo
   static const Color accentWeakNetwork = Color(0xFFFFB547); // Amber
   static const Color accentQuiz = Color(0xFF00C781); // Emerald
   static const Color accentAiPrimary = Color(0xFF7B61FF); // Purple
@@ -56,7 +56,7 @@ class AppColors {
   // ── Gradients ─────────────────────────────────────────────────────────────
 
   static const Gradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF5B5FFF), Color(0xFF00D4FF)],
+    colors: [Color(0xFF6B51EF), Color(0xFF00C4D8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -86,13 +86,20 @@ class AppColors {
   );
 
   static const Gradient indigoGradient = LinearGradient(
-    colors: [Color(0xFF5B5FFF), Color(0xFF7B61FF)],
+    colors: [Color(0xFF6B51EF), Color(0xFF7B61FF)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const Gradient centerButtonGradient = LinearGradient(
     colors: [Color(0xFF7B61FF), Color(0xFF00E5FF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  // ── Light mode ─────────────────────────────────────────────────────────
+  static const LinearGradient primaryGradientLight = LinearGradient(
+    colors: [Color(0xFF6B51EF), Color(0xFF00C4D8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -117,3 +124,4 @@ class AppColors {
   static Color textSecondaryFor(Brightness brightness) =>
       brightness == Brightness.dark ? textSecondaryDark : textSecondaryLight;
 }
+

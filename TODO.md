@@ -1,8 +1,6 @@
-- [ ] Update Profile tab UI per requirements
-  - [ ] Profile header shows logged-in user details + profile picture
-  - [ ] Top stat card: replace "Lessons" with "Lesson Categories"
-  - [ ] "My learning" section: show recently watched content categories; View All shows all watched categories
-  - [ ] Settings bottom sheet: keep top "Appearance" toggle card, remove the extra "Appearance" option tile from the list
-  - [ ] Edit Profile action: implement navigation/bottom-sheet form to edit user details
+# TODO
 
+- [ ] Update `AdminProfileScreen` to fetch `profiles.full_name` from Supabase using `auth.currentUser.id` (FutureBuilder), and remove reliance on `userMetadata['full_name']`.
+- [ ] Ensure loading state shows CircularProgressIndicator and not-logged-in state shows appropriate UI.
+- [ ] Run `flutter analyze` and verify the Admin Profile name/initials renders correctly.
 

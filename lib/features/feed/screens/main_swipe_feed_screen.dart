@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../../core/constants/constants.dart';
 import '../../../core/services/session_manager.dart';
@@ -323,292 +325,28 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
                       final initials =
                           user == null ? 'U' : _initialsFromUser(user);
 
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Container(decoration: BoxDecoration(gradient: cardGradient)),
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.22),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(alpha: 0.12),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      lesson.category,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                      return _FeedCard(
+                        lesson: lesson,
+                        isLiked: isLiked,
+                        isSaved: isSaved,
+                        likeCount: likeCount,
+                        cardGradient: cardGradient,
+                        avatarUrl: avatarUrl,
+                        initials: initials,
+                        onLike: () => _toggleLike(lesson),
+                        onSave: () => _toggleSave(lesson),
+                        onShare: () => _shareLesson(lesson),
+                        onComment: () => _openComments(context),
+                        onAvatarTap: user == null
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const ProfileScreen(),
                                   ),
-                                  const SizedBox(height: 18),
-                                  Text(
-                                    lesson.title,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.1,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black54,
-                                          blurRadius: 8,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    lesson.content.isNotEmpty
-                                        ? lesson.content
-                                        : lesson.description,
-                                    textAlign: TextAlign.center,
-                                    maxLines: 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.9),
-                                      fontSize: 15,
-                                      height: 1.45,
-                                      shadows: const [
-                                        Shadow(
-                                          color: Colors.black54,
-                                          blurRadius: 4,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: 120,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.black.withValues(alpha: 0.6),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: SafeArea(
-                              bottom: false,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: user == null
-                                          ? null
-                                          : () {
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      const ProfileScreen(),
-                                                ),
-                                              );
-                                            },
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundImage: avatarUrl != null
-                                            ? NetworkImage(avatarUrl)
-                                            : null,
-                                        backgroundColor:
-                                            Colors.white.withValues(alpha: 0.18),
-                                        child: avatarUrl == null
-                                            ? Text(
-                                                initials,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              )
-                                            : null,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    const Text(
-                                      'For You',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    GestureDetector(
-                                      onTap: () => _openSearch(context),
-                                      child: Container(
-                                        width: 38,
-                                        height: 38,
-                                        decoration: BoxDecoration(
-                                          color:
-                                              Colors.black.withValues(alpha: 0.3),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.search_rounded,
-                                          color: Colors.white,
-                                          size: 22,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: 12,
-                            bottom: 120,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _ActionButton(
-                                  icon: isLiked
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  label: likeCount,
-                                  color: isLiked ? Colors.red : Colors.white,
-                                  onTap: () => _toggleLike(lesson),
-                                ),
-                                const SizedBox(height: 20),
-                                _ActionButton(
-                                  icon: Icons.chat_bubble_rounded,
-                                  label: 'Comment',
-                                  onTap: () => _openComments(context),
-                                ),
-                                const SizedBox(height: 20),
-                                _ActionButton(
-                                  icon: Icons.share_rounded,
-                                  label: 'Share',
-                                  onTap: () => _shareLesson(lesson),
-                                ),
-                                const SizedBox(height: 20),
-                                _ActionButton(
-                                  icon: isSaved
-                                      ? Icons.bookmark_rounded
-                                      : Icons.bookmark_border_rounded,
-                                  label: 'Save',
-                                  color: isSaved ? Colors.amber : Colors.white,
-                                  onTap: () => _toggleSave(lesson),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Positioned(
-                            left: 16,
-                            right: 80,
-                            bottom: 100,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primaryDark
-                                        .withValues(alpha: 0.8),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    lesson.category,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  lesson.title,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black54,
-                                        blurRadius: 8,
-                                      ),
-                                    ],
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  lesson.description,
-                                  style: TextStyle(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.85),
-                                    fontSize: 13,
-                                    shadows: const [
-                                      Shadow(
-                                        color: Colors.black54,
-                                        blurRadius: 4,
-                                      ),
-                                    ],
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: 250,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [
-                                    Colors.black.withValues(alpha: 0.75),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                                );
+                              },
+                        onSearch: () => _openSearch(context),
                       );
                     },
                   ),
@@ -618,6 +356,468 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class _FeedCard extends StatefulWidget {
+  final LessonModel lesson;
+  final bool isLiked;
+  final bool isSaved;
+  final String likeCount;
+  final Gradient cardGradient;
+  final String? avatarUrl;
+  final String initials;
+  final VoidCallback onLike;
+  final VoidCallback onSave;
+  final VoidCallback onShare;
+  final VoidCallback onComment;
+  final VoidCallback? onAvatarTap;
+  final VoidCallback onSearch;
+
+  const _FeedCard({
+    required this.lesson,
+    required this.isLiked,
+    required this.isSaved,
+    required this.likeCount,
+    required this.cardGradient,
+    required this.avatarUrl,
+    required this.initials,
+    required this.onLike,
+    required this.onSave,
+    required this.onShare,
+    required this.onComment,
+    required this.onAvatarTap,
+    required this.onSearch,
+  });
+
+  @override
+  State<_FeedCard> createState() => _FeedCardState();
+}
+
+class _FeedCardState extends State<_FeedCard> {
+  VideoPlayerController? _controller;
+  Future<void>? _initializeFuture;
+  bool _usingVideo = false;
+  YoutubePlayerController? _youtubeController;
+  bool _usingYoutube = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideo();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FeedCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lesson.id != widget.lesson.id ||
+        oldWidget.lesson.videoUrl != widget.lesson.videoUrl) {
+      _disposeVideo();
+      _initVideo();
+    }
+  }
+
+  Future<void> _initVideo() async {
+    final videoUrl = widget.lesson.videoUrl?.trim();
+    if (videoUrl == null || videoUrl.isEmpty) return;
+
+    try {
+      if (videoUrl.startsWith('yt:')) {
+        final videoId = videoUrl.substring(3).trim();
+        if (videoId.isEmpty) return;
+
+        _youtubeController = YoutubePlayerController(
+          initialVideoId: videoId,
+          flags: const YoutubePlayerFlags(
+            autoPlay: false,
+            mute: false,
+            enableCaption: true,
+            loop: false,
+          ),
+        );
+        if (mounted) {
+          setState(() {
+            _usingYoutube = true;
+          });
+        }
+        return;
+      }
+
+      final uri = Uri.tryParse(videoUrl);
+      if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+        return;
+      }
+
+      final controller = VideoPlayerController.networkUrl(uri);
+      final initFuture = controller.initialize();
+      setState(() {
+        _controller = controller;
+        _initializeFuture = initFuture;
+      });
+
+      await initFuture;
+      controller.setLooping(true);
+      controller.setVolume(0);
+      if (mounted) {
+        setState(() {
+          _controller = controller;
+          _initializeFuture = initFuture;
+          _usingVideo = true;
+        });
+        controller.play();
+      }
+    } catch (_) {
+      _disposeVideo();
+    }
+  }
+
+  void _disposeVideo() {
+    _controller?.dispose();
+    _controller = null;
+    _initializeFuture = null;
+    _usingVideo = false;
+    _youtubeController?.dispose();
+    _youtubeController = null;
+    _usingYoutube = false;
+  }
+
+  @override
+  void dispose() {
+    _disposeVideo();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lesson = widget.lesson;
+
+    if (_usingYoutube && _youtubeController != null) {
+      return YoutubePlayerBuilder(
+        player: YoutubePlayer(
+          controller: _youtubeController!,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: AppColors.primaryDark,
+          progressColors: ProgressBarColors(
+            playedColor: AppColors.primaryDark,
+            handleColor: AppColors.primaryDark,
+            bufferedColor: AppColors.primaryDark.withValues(alpha: 0.3),
+            backgroundColor: Colors.white24,
+          ),
+        ),
+        builder: (context, player) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              player,
+              _buildOverlayContent(lesson),
+            ],
+          );
+        },
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (_usingVideo && _controller != null)
+          FutureBuilder<void>(
+            future: _initializeFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return Container(decoration: BoxDecoration(gradient: widget.cardGradient));
+              }
+              if (_controller!.value.hasError) {
+                return Container(decoration: BoxDecoration(gradient: widget.cardGradient));
+              }
+              return FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller!.value.size.width,
+                  height: _controller!.value.size.height,
+                  child: VideoPlayer(_controller!),
+                ),
+              );
+            },
+          )
+        else
+          Container(decoration: BoxDecoration(gradient: widget.cardGradient)),
+        _buildOverlayContent(lesson),
+      ],
+    );
+  }
+
+  Widget _buildOverlayContent(LessonModel lesson) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Text(
+                    lesson.category,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  lesson.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  lesson.content.isNotEmpty ? lesson.content : lesson.description,
+                  textAlign: TextAlign.center,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 15,
+                    height: 1.45,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 120,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: widget.onAvatarTap,
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundImage: widget.avatarUrl != null
+                          ? NetworkImage(widget.avatarUrl!)
+                          : null,
+                      backgroundColor: Colors.white.withValues(alpha: 0.18),
+                      child: widget.avatarUrl == null
+                          ? Text(
+                              widget.initials,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  const Spacer(),
+                  const Text(
+                    'For You',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: widget.onSearch,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.search_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 12,
+          bottom: 120,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ActionButton(
+                icon: widget.isLiked
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                label: widget.likeCount,
+                color: widget.isLiked ? Colors.red : Colors.white,
+                onTap: widget.onLike,
+              ),
+              const SizedBox(height: 20),
+              _ActionButton(
+                icon: Icons.chat_bubble_rounded,
+                label: 'Comment',
+                onTap: widget.onComment,
+              ),
+              const SizedBox(height: 20),
+              _ActionButton(
+                icon: Icons.share_rounded,
+                label: 'Share',
+                onTap: widget.onShare,
+              ),
+              const SizedBox(height: 20),
+              _ActionButton(
+                icon: widget.isSaved
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+                label: 'Save',
+                color: widget.isSaved ? Colors.amber : Colors.white,
+                onTap: widget.onSave,
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 80,
+          bottom: 100,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryDark.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  lesson.category,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                lesson.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 8,
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                lesson.description,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 13,
+                  shadows: const [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            height: 250,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.75),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

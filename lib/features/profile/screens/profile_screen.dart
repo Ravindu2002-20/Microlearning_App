@@ -6,8 +6,12 @@ import '../../../core/constants/constants.dart';
 import '../../../core/services/session_manager.dart';
 import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
+import '../../auth/screens/login_registration_screen.dart';
 import '../../learning/repositories/learning_repository.dart';
 import '../../learning/models/lesson_model.dart';
+import '../../admin/screens/admin_profile_screen.dart';
+import '../../admin/screens/admin_review_screen.dart';
+import '../../../core/services/admin_service.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +108,76 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundDark,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.spacingLg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_off_rounded,
+                      size: 72, color: AppColors.textSecondaryDark),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'You are signed out',
+                    style: TextStyle(
+                      color: AppColors.textPrimaryDark,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Log in to see your profile, saved lessons, and progress.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.textSecondaryDark,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (_) => const LoginRegistrationScreen(),
+                        ),
+                        (_) => false,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius:
+                            BorderRadius.circular(AppDimensions.radiusMd),
+                      ),
+                      child: const Text(
+                        'Log In',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
       body: SafeArea(
@@ -914,161 +988,175 @@ class _SettingsSheet extends StatelessWidget {
       _SettingItem(Icons.tune_outlined, 'Learning Preferences'),
     ];
 
-    return Container(
-      margin: const EdgeInsets.only(
-        left: AppDimensions.spacingLg,
-        right: AppDimensions.spacingLg,
-        bottom: AppDimensions.spacingXxl,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusLg),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 32,
-            offset: const Offset(0, 8),
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.75;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppDimensions.cardRadiusLg),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: Container(
+          margin: const EdgeInsets.only(
+            left: AppDimensions.spacingLg,
+            right: AppDimensions.spacingLg,
+            bottom: AppDimensions.spacingXxl,
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Container(
-            margin: const EdgeInsets.only(top: 10, bottom: 6),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: AppColors.textSecondaryDark.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceDark,
+            borderRadius: BorderRadius.circular(AppDimensions.cardRadiusLg),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 32,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppDimensions.spacingXxl,
-              vertical: AppDimensions.spacingMd,
-            ),
-            child: Text(
-              'Settings',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimaryDark,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textSecondaryDark.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-          const Divider(height: 1, color: AppColors.textSecondaryDark),
-          Consumer(
-            builder: (context, ref, _) {
-              final themeMode = ref.watch(themeProvider);
-              final isDark = themeMode == ThemeMode.dark;
+            const Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingXxl,
+                vertical: AppDimensions.spacingMd,
+              ),
+              child: Text(
+                'Settings',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimaryDark,
+                ),
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.textSecondaryDark),
+            Consumer(
+              builder: (context, ref, _) {
+                final themeMode = ref.watch(themeProvider);
+                final isDark = themeMode == ThemeMode.dark;
 
-              return Container(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingLg,
-                  vertical: AppDimensions.spacingSm,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingLg,
-                  vertical: AppDimensions.spacingMd,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.primaryDark.withValues(alpha: 0.15)
-                            : AppColors.primaryLight.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
-                      ),
-                      child: Icon(
-                        isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                        color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: AppDimensions.spacingMd),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Appearance',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? AppColors.textPrimaryDark
-                                  : AppColors.textPrimaryLight,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            isDark ? 'Dark mode' : 'Light mode',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? AppColors.textSecondaryDark
-                                  : AppColors.textSecondaryLight,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => ref.read(themeProvider.notifier).toggle(),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        width: 50,
-                        height: 28,
+                return Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacingLg,
+                    vertical: AppDimensions.spacingSm,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacingLg,
+                    vertical: AppDimensions.spacingMd,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.cardRadiusMd),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          gradient: isDark ? AppColors.primaryGradientLight : null,
                           color: isDark
-                              ? null
-                              : AppColors.textSecondaryLight.withValues(alpha: 0.2),
+                              ? AppColors.primaryDark.withValues(alpha: 0.15)
+                              : AppColors.primaryLight.withValues(alpha: 0.1),
+                          borderRadius:
+                              BorderRadius.circular(AppDimensions.radiusSm),
                         ),
-                        child: AnimatedAlign(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeInOut,
-                          alignment:
-                              isDark ? Alignment.centerRight : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.all(3),
-                            width: 22,
-                            height: 22,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                        child: Icon(
+                          isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                          color: isDark
+                              ? AppColors.primaryDark
+                              : AppColors.primaryLight,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: AppDimensions.spacingMd),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Appearance',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? AppColors.textPrimaryDark
+                                    : AppColors.textPrimaryLight,
+                              ),
                             ),
-                            child: Icon(
-                              isDark
-                                  ? Icons.nights_stay_rounded
-                                  : Icons.wb_sunny_rounded,
-                              size: 12,
-                              color: isDark
-                                  ? AppColors.primaryDark
-                                  : const Color(0xFFF59E0B),
+                            const SizedBox(height: 2),
+                            Text(
+                              isDark ? 'Dark mode' : 'Light mode',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark
+                                    ? AppColors.textSecondaryDark
+                                    : AppColors.textSecondaryLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => ref.read(themeProvider.notifier).toggle(),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          width: 50,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            gradient:
+                                isDark ? AppColors.primaryGradientLight : null,
+                            color: isDark
+                                ? null
+                                : AppColors.textSecondaryLight
+                                    .withValues(alpha: 0.2),
+                          ),
+                          child: AnimatedAlign(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeInOut,
+                            alignment: isDark
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.all(3),
+                              width: 22,
+                              height: 22,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                isDark
+                                    ? Icons.nights_stay_rounded
+                                    : Icons.wb_sunny_rounded,
+                                size: 12,
+                                color: isDark
+                                    ? AppColors.primaryDark
+                                    : const Color(0xFFF59E0B),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
                   ),
                 );
               },
@@ -1188,6 +1276,14 @@ class _SettingsSheet extends StatelessWidget {
                   if (confirmed != true) return;
                   if (context.mounted) Navigator.pop(context);
                   await performLogout();
+                  if (context.mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (_) => const LoginRegistrationScreen(),
+                      ),
+                      (_) => false,
+                    );
+                  }
                 },
                 child: Container(
                   width: double.infinity,
@@ -1221,9 +1317,14 @@ class _SettingsSheet extends StatelessWidget {
             const SizedBox(height: AppDimensions.spacingSm),
           ],
         ),
-      );
+          ),
+        ),
+      ),
+    );
   }
 }
+
+
 
 class _SettingItem {
   final IconData icon;

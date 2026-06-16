@@ -4,20 +4,26 @@ class LessonModel {
   final String description;
   final String content;
   final String category;
-  final String? videoPath;
+
+  // New URL fields (Supabase columns: video_url, thumbnail_url)
+  final String? videoUrl;
   final String? thumbnailUrl;
+
   final int? durationSeconds;
   final String difficultyLevel;
   final String format;
   final String minNetworkStrength;
   final bool safeForMotion;
+
   final String status;
+
   final String? uploadedBy;
   final String? adminNotes;
   final String? approvedBy;
   final DateTime? approvedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
   final bool isPublished;
 
   const LessonModel({
@@ -26,7 +32,7 @@ class LessonModel {
     required this.description,
     required this.content,
     required this.category,
-    this.videoPath,
+    this.videoUrl,
     this.thumbnailUrl,
     this.durationSeconds,
     required this.difficultyLevel,
@@ -47,18 +53,22 @@ class LessonModel {
   DateTime? get reviewedAt => approvedAt;
 
   factory LessonModel.fromJson(Map<String, dynamic> json) {
+    final videoUrl = json['video_url']?.toString() ??
+        json['video_path']?.toString();
+
     return LessonModel(
       id: json['id']?.toString() ?? '',
       title: json['title'] as String? ?? 'Untitled',
       description: json['description'] as String? ?? '',
       content: json['content'] as String? ?? '',
       category: json['category'] as String? ?? 'General',
-      videoPath: json['video_path']?.toString(),
+      videoUrl: videoUrl,
       thumbnailUrl: json['thumbnail_url']?.toString(),
       durationSeconds: json['duration_seconds'] as int?,
       difficultyLevel: json['difficulty_level']?.toString() ?? 'beginner',
       format: json['format'] as String? ?? 'text',
-      minNetworkStrength: json['min_network_strength'] as String? ?? 'weak',
+      minNetworkStrength:
+          json['min_network_strength'] as String? ?? 'weak',
       safeForMotion: json['safe_for_motion'] as bool? ?? true,
       status: json['status']?.toString() ?? 'approved',
       uploadedBy: json['uploaded_by']?.toString(),
@@ -83,7 +93,7 @@ class LessonModel {
     String? description,
     String? content,
     String? category,
-    String? videoPath,
+    String? videoUrl,
     String? thumbnailUrl,
     int? durationSeconds,
     String? difficultyLevel,
@@ -105,7 +115,7 @@ class LessonModel {
       description: description ?? this.description,
       content: content ?? this.content,
       category: category ?? this.category,
-      videoPath: videoPath ?? this.videoPath,
+      videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       difficultyLevel: difficultyLevel ?? this.difficultyLevel,
@@ -130,7 +140,8 @@ class LessonModel {
       'description': description,
       'content': content,
       'category': category,
-      'video_path': videoPath,
+      'video_url': videoUrl,
+      'video_path': videoUrl,
       'thumbnail_url': thumbnailUrl,
       'duration_seconds': durationSeconds,
       'difficulty_level': difficultyLevel,
@@ -155,7 +166,8 @@ class LessonModel {
       'description': description,
       'content': content,
       'category': category,
-      'video_path': videoPath,
+      'video_url': videoUrl,
+      'video_path': videoUrl,
       'thumbnail_url': thumbnailUrl,
       'duration_seconds': durationSeconds,
       'difficulty_level': difficultyLevel,

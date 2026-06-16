@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/constants.dart';
@@ -171,16 +168,14 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
 
     try {
       final videoPath = _selectedVideo!.path!;
-      final fileName = _selectedVideo!.name.isNotEmpty
-          ? _selectedVideo!.name
-          : 'lesson-video-${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final fileName = 'public/${user.id}/video.mp4';
 
-      final videoUrl = await repo.uploadVideoToStorage(videoPath, fileName);
-      if (videoUrl == null) throw Exception('Video upload failed');
+      final uploadedPath = await repo.uploadVideoToStorage(videoPath, fileName);
+      if (uploadedPath == null) throw Exception('Video upload failed');
 
       await repo.submitLesson(
         lesson: lesson,
-        videoUrl: videoUrl,
+        videoPath: uploadedPath,
         thumbnailUrl: null,
       );
     } catch (_) {
@@ -824,4 +819,3 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
-

@@ -10,6 +10,8 @@ import '../../learning/models/lesson_model.dart';
 import '../../learning/models/video_model.dart';
 import '../../learning/repositories/lesson_repository.dart';
 
+// ignore_for_file: prefer_const_constructors_in_immutables, use_super_parameters
+
 // ─── Entry points ─────────────────────────────────────────────────────────────
 //
 // 1. From LessonDashboardScreen  → LessonDetailScreen(item: LessonItem)
@@ -29,10 +31,12 @@ class LessonDetailScreen extends StatefulWidget {
 
   /// Navigate from the dashboard (preferred) — zero extra network calls for
   /// YouTube items.
+  // ignore: prefer_const_constructors_in_immutables
   LessonDetailScreen({super.key, required LessonItem item})
       : _source = _SourceItem(item) as _Source; // workaround: see init
 
   // ignore: use_super_parameters
+  // ignore: prefer_const_constructors_in_immutables
   LessonDetailScreen._raw({Key? key, required _Source source})
       : _source = source,
         super(key: key);
@@ -78,6 +82,26 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       case _SourceModel(:final lesson):
         await _initFromModel(lesson);
     }
+  }
+
+  void _clearVideoState() {
+    _ytController?.dispose();
+    _ytController = null;
+    _chewieController?.dispose();
+    _chewieController = null;
+    _videoController?.dispose();
+    _videoController = null;
+    _videoLoading = false;
+    _videoError = null;
+  }
+
+  Future<void> _retryVideo() async {
+    if (!mounted) return;
+    setState(() {
+      _clearVideoState();
+      _metaLoading = true;
+    });
+    await _init();
   }
 
   // ── Init from LessonItem (dashboard) ─────────────────────────────────────
@@ -150,7 +174,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       } else {
         setState(() {
           _videoLoading = false;
-          _videoError   = 'No video available.';
+          _videoError   = 'This lesson video is unavailable right now. It may have been moved or overwritten.';
         });
       }
     } catch (e) {
@@ -158,7 +182,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (!mounted) return;
       setState(() {
         _videoLoading = false;
-        _videoError   = 'Could not load video.';
+        _videoError   = 'This lesson video is unavailable right now. It may have been moved or overwritten.';
       });
     }
   }
@@ -195,7 +219,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (!mounted) return;
       setState(() {
         _videoLoading = false;
-        _videoError   = 'Could not load video.';
+        _videoError   = 'This lesson video could not be played. The storage file may be missing.';
       });
     }
   }
@@ -219,9 +243,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
   @override
   void dispose() {
-    _ytController?.dispose();
-    _chewieController?.dispose();
-    _videoController?.dispose();
+    _clearVideoState();
     super.dispose();
   }
 
@@ -305,12 +327,57 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     if (_videoError != null) {
       return Stack(fit: StackFit.expand, children: [
         _thumb(),
+        Container(color: Colors.black.withValues(alpha: 0.45)),
         Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-            child: const Text('Video unavailable',
-                style: TextStyle(color: Colors.white70, fontSize: 13)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.play_circle_outline_rounded,
+                      color: Colors.white70, size: 36),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Video unavailable',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _videoError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: _retryVideo,
+                    icon: const Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 18),
+                    label: const Text(
+                      'Try again',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ]);

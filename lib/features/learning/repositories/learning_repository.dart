@@ -5,6 +5,8 @@ import '../models/lesson_model.dart';
 import '../models/video_model.dart';
 import '../../../core/services/context_engine_service.dart';
 
+const _kLessonVideoBucket = 'lesson_videos';
+
 class LearningRepository {
   final SupabaseClient _supabase;
 
@@ -130,9 +132,13 @@ class LearningRepository {
       // Offline fallback — only Storage lessons are cached.
       if (_offlineLessonCache.isNotEmpty) {
         return _offlineLessonCache.where((l) {
-          if (ambientContext.isInMotion && !l.safeForMotion) return false;
+          if (ambientContext.isInMotion && !l.safeForMotion) {
+            return false;
+          }
           if (ambientContext.networkStrength == AppNetworkStrength.weak &&
-              l.format == 'video') return false;
+              l.format == 'video') {
+            return false;
+          }
           return true;
         }).toList();
       }
@@ -218,7 +224,7 @@ class LearningRepository {
         .toList();
 
     // Fetch both tables in parallel.
-    final results = await Future.wait([
+    final results = await Future.wait<List<LessonModel>>([
       _fetchApprovedLessons(
         ambientContext: ambientContext,
         completedIds: completedIds,
@@ -226,8 +232,8 @@ class LearningRepository {
       _fetchYouTubeVideos(),
     ]);
 
-    final lessons = results[0] as List<LessonModel>;
-    final ytAsLessons = results[1] as List<LessonModel>;
+    final lessons = results[0];
+    final ytAsLessons = results[1];
 
     final combined = [...lessons, ...ytAsLessons];
     combined.sort((a, b) {
@@ -277,9 +283,27 @@ class LearningRepository {
       final response =
           await query.order('created_at', ascending: false).limit(10);
 
-      return (response as List<dynamic>)
-          .map((row) => LessonModel.fromJson(row as Map<String, dynamic>))
-          .toList();
+      return (response as List<dynamic>).map((row) {
+        final json = row as Map<String, dynamic>;
+        final lesson = LessonModel.fromJson(json);
+        final videoPath = json['video_path']?.toString();
+        if (videoPath == null || videoPath.isEmpty) {
+          return lesson;
+        }
+        if (videoPath.startsWith('http')) {
+          return lesson.copyWith(videoUrl: videoPath);
+        }
+
+        final normalizedPath = videoPath.startsWith('$_kLessonVideoBucket/')
+            ? videoPath.substring(_kLessonVideoBucket.length + 1)
+            : videoPath;
+
+        final publicUrl = _supabase.storage
+            .from(_kLessonVideoBucket)
+            .getPublicUrl(normalizedPath);
+
+        return lesson.copyWith(videoUrl: publicUrl);
+      }).toList();
     } catch (e, st) {
       debugPrint('_fetchApprovedLessons error: $e\n$st');
       return [];

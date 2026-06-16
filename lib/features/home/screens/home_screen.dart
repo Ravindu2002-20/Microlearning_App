@@ -51,20 +51,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (user != null) {
       try {
+        // Be tolerant to schema differences. Pick the first non-empty name field.
         final profile = await Supabase.instance.client
             .from('profiles')
-            .select('full_name, avatar_url')
+            .select('full_name, name, username, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
 
+
         if (profile != null) {
-          displayName = (profile['full_name'] as String?)?.trim().isNotEmpty == true
-              ? (profile['full_name'] as String).trim()
-              : displayName;
-          avatarUrl = (profile['avatar_url'] as String?)?.trim().isNotEmpty == true
-              ? (profile['avatar_url'] as String).trim()
+          final fullName = (profile['full_name'] as String?)?.trim();
+          final name = (profile['name'] as String?)?.trim();
+          final username = (profile['username'] as String?)?.trim();
+
+          if (fullName != null && fullName.isNotEmpty) {
+            displayName = fullName;
+          } else if (name != null && name.isNotEmpty) {
+            displayName = name;
+          } else if (username != null && username.isNotEmpty) {
+            displayName = username;
+          }
+
+          final avatarCandidate = (profile['avatar_url'] as String?)?.trim();
+          avatarUrl = (avatarCandidate != null && avatarCandidate.isNotEmpty)
+              ? avatarCandidate
               : avatarUrl;
         }
+
       } catch (_) {
         // Fallback to auth metadata and initials when profile row is not available yet.
       }
@@ -193,18 +206,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
+    // Match the UI requirement wording.
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
+
 
   @override
   Widget build(BuildContext context) {
     final userName = _displayName ?? 'Learner';
-    final headerHeight = 140.0;
+    // Keep header compact so the rest of the content is always visible.
+final headerHeight = 84.0;
+
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
       body: Stack(
         children: [
           Column(
@@ -212,31 +230,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Container(
                 height: headerHeight,
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE8E6F0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
                 ),
                 child: SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              '${_greeting()}, $userName 👋',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 29,
-                                fontWeight: FontWeight.w800,
-                                height: 1.15,
-                                letterSpacing: -0.4,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _greeting(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Theme.of(context).textTheme.displayMedium?.color ??
+                                      (isDark ? AppColors.textPrimaryDark : Colors.black),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.1,
+                                  letterSpacing: -0.2,
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$userName 👋',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Theme.of(context).textTheme.displayLarge?.color ??
+                                      (isDark ? AppColors.textPrimaryDark : Colors.black),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.1,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                        const SizedBox(width: 12),
                         _ProfileAvatar(
                           imageUrl: _avatarUrl,
                           initials: _initials ?? 'U',
@@ -250,6 +289,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   children: [
+
                     _SectionCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,10 +449,12 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.surfaceDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -444,10 +486,12 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Colors.black,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.textPrimaryDark
+                : Colors.black,
           ),
         ),
         const Spacer(),
@@ -484,10 +528,12 @@ class _SectionHeaderRow extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: Colors.black,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.textPrimaryDark
+                : Colors.black,
           ),
         ),
         const Spacer(),
@@ -526,26 +572,38 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F2F7),
+        color: isDark ? AppColors.surfaceDark : const Color(0xFFF2F2F7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         children: [
-          const Icon(Icons.access_time_rounded, size: 18, color: Color(0xFF8E8E93)),
+          Icon(
+            Icons.access_time_rounded,
+            size: 18,
+            color: isDark ? AppColors.textSecondaryDark.withValues(alpha: 0.8) : const Color(0xFF8E8E93),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: controller,
               onSubmitted: onSubmitted,
-              decoration: const InputDecoration(
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimaryDark : Colors.black,
+              ),
+              decoration: InputDecoration(
                 border: InputBorder.none,
                 isDense: true,
                 hintText: 'Search courses...',
-                hintStyle: TextStyle(color: Color(0xFF8E8E93)),
+                hintStyle: TextStyle(
+                  color: isDark
+                      ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
+                      : const Color(0xFF8E8E93),
+                ),
               ),
             ),
           ),
@@ -555,7 +613,13 @@ class _SearchField extends StatelessWidget {
               if (value.text.isEmpty) return const SizedBox.shrink();
               return GestureDetector(
                 onTap: onClear,
-                child: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF8E8E93)),
+                child: Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: isDark
+                      ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
+                      : const Color(0xFF8E8E93),
+                ),
               );
             },
           ),
@@ -927,13 +991,17 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Keep a fixed circle size as requested.
     return Container(
       width: 56,
       height: 56,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFF5B5FEF), width: 2),
+        border: Border.all(
+          color: const Color(0xFF5B5FEF),
+          width: 2,
+        ),
       ),
       child: ClipOval(
         child: imageUrl != null
@@ -955,8 +1023,9 @@ class _InitialAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: const Color(0xFFE8E6F0),
+      color: isDark ? AppColors.surfaceDark : const Color(0xFFE8E6F0),
       alignment: Alignment.center,
       child: Text(
         initials,

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/context_engine_service.dart';
 import '../../learning/models/lesson_model.dart';
 import '../../learning/repositories/learning_repository.dart';
+import '../../auth/repositaries/auth_repository.dart';
 
 // Provides the singleton ContextEngineService, disposed when no longer watched
 final contextEngineProvider = Provider.autoDispose<ContextEngineService>((ref) {
@@ -21,6 +22,10 @@ final contextStateStreamProvider = StreamProvider<UserContextState>((ref) {
 
 final learningRepositoryProvider = Provider<LearningRepository>((ref) {
   return LearningRepository(Supabase.instance.client);
+});
+
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return AuthRepository(Supabase.instance.client);
 });
 
 // FutureProvider.family that fetches filtered lessons given a UserContextState

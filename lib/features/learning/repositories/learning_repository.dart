@@ -11,6 +11,101 @@ class LearningRepository {
 
   LearningRepository(this._supabase);
 
+  // Upload a new lesson - saves as pending
+  Future<LessonModel?> uploadLesson(LessonModel lesson) async {
+    try {
+      final response = await _supabase
+          .from('lessons')
+          .insert(lesson.toInsertJson())
+          .select()
+          .single();
+      return LessonModel.fromJson(response);
+    } catch (e) {
+      debugPrint('uploadLesson error: $e');
+      return null;
+    }
+  }
+
+  // Fetch lessons uploaded by the current user (all statuses)
+  Future<List<LessonModel>> fetchMyUploads(String userId) async {
+    try {
+      final response = await _supabase
+          .from('lessons')
+          .select()
+          .eq('uploaded_by', userId)
+          .order('created_at', ascending: false);
+      return (response as List)
+          .map((json) => LessonModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchMyUploads error: $e');
+      return [];
+    }
+  }
+
+  // Admin only - fetch all pending lessons
+  Future<List<LessonModel>> fetchPendingLessons() async {
+    try {
+      final response = await _supabase
+          .from('lessons')
+          .select()
+          .eq('status', 'pending')
+          .order('created_at', ascending: false);
+      return (response as List)
+          .map((json) => LessonModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchPendingLessons error: $e');
+      return [];
+    }
+  }
+
+  // Admin only - approve a lesson
+  Future<bool> approveLesson(String lessonId, String adminId) async {
+    try {
+      await _supabase.from('lessons').update({
+        'status': 'approved',
+        'reviewed_by': adminId,
+        'reviewed_at': DateTime.now().toIso8601String(),
+      }).eq('id', lessonId);
+      return true;
+    } catch (e) {
+      debugPrint('approveLesson error: $e');
+      return false;
+    }
+  }
+
+  // Admin only - reject a lesson with a reason
+  Future<bool> rejectLesson(
+      String lessonId, String adminId, String reason) async {
+    try {
+      await _supabase.from('lessons').update({
+        'status': 'rejected',
+        'reviewed_by': adminId,
+        'reviewed_at': DateTime.now().toIso8601String(),
+        'rejection_reason': reason,
+      }).eq('id', lessonId);
+      return true;
+    } catch (e) {
+      debugPrint('rejectLesson error: $e');
+      return false;
+    }
+  }
+
+  // Check if current user is admin
+  Future<bool> isAdmin(String userId) async {
+    try {
+      final response = await _supabase
+          .from('admin_users')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+      return response != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
   Future<List<LessonModel>> fetchAdaptiveViewportFeed({
     required String userUuid,
     required UserContextState ambientContext,
@@ -68,7 +163,8 @@ class LearningRepository {
     // 2) Build the lessons query
     PostgrestFilterBuilder<PostgrestList> query = _supabase
         .from('lessons')
-        .select();
+        .select()
+        .eq('status', 'approved');
 
     if (completedLessonIds.isNotEmpty) {
       query = query.not('id', 'in', completedLessonIds);

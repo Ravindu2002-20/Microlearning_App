@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/constants.dart';
+import '../../../core/services/admin_service.dart';
 import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../admin/screens/admin_review_screen.dart';
+import '../../learning/repositories/learning_repository.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data Models
@@ -1030,15 +1035,159 @@ class _SettingsSheet extends StatelessWidget {
                       ),
                     ),
                   ],
+                  ),
+                );
+              },
+            ),
+            FutureBuilder<bool>(
+              future: LearningRepository(Supabase.instance.client)
+                  .isAdmin(Supabase.instance.client.auth.currentUser?.id ?? ''),
+              builder: (context, snapshot) {
+                if (snapshot.data != true) {
+                  return const SizedBox.shrink();
+                }
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AdminReviewScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingLg,
+                      vertical: AppDimensions.spacingSm,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingLg,
+                      vertical: AppDimensions.spacingMd,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.1),
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.cardRadiusMd),
+                      border: Border.all(
+                        color: AppColors.warning.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.15),
+                            borderRadius:
+                                BorderRadius.circular(AppDimensions.radiusSm),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_rounded,
+                            color: AppColors.warning,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: AppDimensions.spacingMd),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Admin Panel',
+                                style: TextStyle(
+                                  color: AppColors.warning,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                'Review pending lessons',
+                                style: TextStyle(
+                                  color: AppColors.warning,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: AppColors.warning,
+                          size: 14,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+            ...settings.map((item) => _SettingsTile(item: item)),
+            const SizedBox(height: AppDimensions.spacingMd),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingLg,
+                vertical: AppDimensions.spacingSm,
+              ),
+              child: GestureDetector(
+                onTap: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Log Out'),
+                      content: const Text('Are you sure you want to log out?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text(
+                            'Log Out',
+                            style: TextStyle(color: AppColors.error),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true) return;
+                  if (context.mounted) Navigator.pop(context);
+                  await performLogout();
+                },
+                child: Container(
+                  width: double.infinity,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.logout_rounded,
+                          color: AppColors.error, size: 20),
+                      SizedBox(width: 10),
+                      Text(
+                        'Log Out',
+                        style: TextStyle(
+                          color: AppColors.error,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
-          ),
-          ...settings.map((item) => _SettingsTile(item: item)),
-          const SizedBox(height: AppDimensions.spacingSm),
-        ],
-      ),
-    );
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingSm),
+          ],
+        ),
+      );
   }
 }
 

@@ -3,18 +3,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 final isAdminProvider = FutureProvider<bool>((ref) async {
   final user = Supabase.instance.client.auth.currentUser;
-  if (user == null) return false;
+  final userId = user?.id;
+  if (userId == null) {
+    return false;
+  }
+
   try {
-    final response = await Supabase.instance.client
+    final res = await Supabase.instance.client
         .from('admin_users')
-        .select('id')
-        .eq('id', user.id)
+        .select('granted_at')
+        .eq('id', userId)
         .maybeSingle();
-    return response != null;
+
+    // res == null => user is not an admin
+    // res != null => user is an admin
+    return res != null;
   } catch (e) {
     return false;
   }
 });
+
 
 Future<void> performLogout() async {
   await Supabase.instance.client.auth.signOut();

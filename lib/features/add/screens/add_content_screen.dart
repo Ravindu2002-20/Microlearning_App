@@ -1,8 +1,9 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/constants.dart';
@@ -102,14 +103,15 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
-  final _picker = ImagePicker();
 
-  XFile? _selectedVideo;
+  PlatformFile? _selectedVideo;
+
   String _category = 'Science';
   String _difficulty = 'beginner';
   String _format = 'text';
   String _minNetwork = 'weak';
   bool _safeForMotion = true;
+
   bool _loading = false;
 
   final _categories = const [
@@ -138,7 +140,8 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
-    if (_selectedVideo == null) {
+
+    if (_selectedVideo == null || _selectedVideo!.path == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a lesson video first.')),
       );
@@ -165,10 +168,20 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
     );
 
     final repo = LessonRepository(Supabase.instance.client);
+
     try {
+      final videoPath = _selectedVideo!.path!;
+      final fileName = _selectedVideo!.name.isNotEmpty
+          ? _selectedVideo!.name
+          : 'lesson-video-${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+      final videoUrl = await repo.uploadVideoToStorage(videoPath, fileName);
+      if (videoUrl == null) throw Exception('Video upload failed');
+
       await repo.submitLesson(
         lesson: lesson,
-        videoFile: File(_selectedVideo!.path),
+        videoUrl: videoUrl,
+        thumbnailUrl: null,
       );
     } catch (_) {
       if (!mounted) return;
@@ -194,6 +207,7 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
     _descCtrl.clear();
     _contentCtrl.clear();
     _selectedVideo = null;
+
     widget.onUploaded();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -236,8 +250,9 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
               textPrimary: textPrimary,
               textSecondary: textSecondary,
               maxLines: 1,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Title is required'
+                  : null,
             ),
             const SizedBox(height: 14),
             _buildField(
@@ -342,8 +357,7 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
                         ),
                         Text(
                           'Works while user is moving',
-                          style:
-                              TextStyle(color: textSecondary, fontSize: 12),
+                          style: TextStyle(color: textSecondary, fontSize: 12),
                         ),
                       ],
                     ),
@@ -447,11 +461,13 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
           onTap: _loading
               ? null
               : () async {
-                  final video = await _picker.pickVideo(
-                    source: ImageSource.gallery,
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['mp4', 'mov', 'mkv', 'webm'],
+                    withData: false,
                   );
-                  if (!mounted || video == null) return;
-                  setState(() => _selectedVideo = video);
+                  if (!mounted || result == null) return;
+                  setState(() => _selectedVideo = result.files.single);
                 },
           child: Container(
             width: double.infinity,
@@ -753,8 +769,7 @@ class _UploadCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border:
-                    Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
               ),
               child: Row(
                 children: [
@@ -777,14 +792,12 @@ class _UploadCard extends StatelessWidget {
               Text(lesson.category,
                   style: TextStyle(color: textSecondary, fontSize: 11)),
               const SizedBox(width: 8),
-              Text('•',
-                  style: TextStyle(color: textSecondary, fontSize: 11)),
+              Text('•', style: TextStyle(color: textSecondary, fontSize: 11)),
               const SizedBox(width: 8),
               Text(lesson.format,
                   style: TextStyle(color: textSecondary, fontSize: 11)),
               const SizedBox(width: 8),
-              Text('•',
-                  style: TextStyle(color: textSecondary, fontSize: 11)),
+              Text('•', style: TextStyle(color: textSecondary, fontSize: 11)),
               const SizedBox(width: 8),
               Text(
                 lesson.difficultyLevel,
@@ -811,3 +824,4 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
+

@@ -19,6 +19,9 @@ dependencies:
   video_player: ^2.9.2
   uuid: ^4.5.1
   image_picker: ^1.1.2
+  chewie: ^1.8.5
+  file_picker: ^8.1.2
+  youtube_player_flutter: ^9.1.1
 
 dev_dependencies:
   flutter_test:

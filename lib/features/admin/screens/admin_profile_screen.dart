@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/services/admin_service.dart';
 import '../../../core/services/theme_service.dart';
+import '../../auth/screens/login_registration_screen.dart';
 
 class AdminProfileScreen extends ConsumerWidget {
   const AdminProfileScreen({super.key});
@@ -20,15 +21,72 @@ class AdminProfileScreen extends ConsumerWidget {
         isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
 
     final user = Supabase.instance.client.auth.currentUser;
+    final userId = user?.id;
     final email = user?.email ?? '';
-    final metadata = user?.userMetadata ?? {};
-    final name = (metadata['full_name'] as String?) ?? 'Admin';
-    final parts = name.trim().split(RegExp(r'\s+'));
-    final initials = parts
-        .take(2)
-        .map((e) => e.isNotEmpty ? e[0] : '')
-        .join()
-        .toUpperCase();
+
+    if (userId == null) {
+      return Scaffold(
+        backgroundColor: bg,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimensions.spacingLg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.admin_panel_settings_outlined,
+                    size: 72, color: AppColors.warning),
+                const SizedBox(height: 16),
+                const Text(
+                  'Admin session ended',
+                  style: TextStyle(
+                    color: AppColors.textPrimaryDark,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please log in again to access the admin area.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: textSecondary, fontSize: 14),
+                ),
+                const SizedBox(height: 24),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (_) => const LoginRegistrationScreen(),
+                      ),
+                      (_) => false,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius:
+                          BorderRadius.circular(AppDimensions.radiusMd),
+                    ),
+                    child: const Text(
+                      'Log In',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
 
     return Scaffold(
       backgroundColor: bg,
@@ -37,33 +95,75 @@ class AdminProfileScreen extends ConsumerWidget {
           child: Column(
             children: [
               const SizedBox(height: 32),
-              Container(
-                width: 90,
-                height: 90,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: AppColors.primaryGradient,
-                ),
-                child: Center(
-                  child: Text(
-                    initials.isEmpty ? 'A' : initials,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: Supabase.instance.client
+                    .from('profiles')
+                    .select('full_name')
+                    .eq('id', userId)
+                    .limit(1)
+                    .then((res) =>
+                        (res as List<dynamic>).cast<Map<String, dynamic>>()),
+
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(
+                      child: SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  }
+
+                  final fullName = (snapshot.data?.isNotEmpty == true)
+                      ? (snapshot.data!.first['full_name'] as String?)
+                      : null;
+
+                  final name = fullName?.trim().isNotEmpty == true
+                      ? fullName!.trim()
+                      : 'Admin';
+
+                  final parts = name.trim().split(RegExp(r'\s+'));
+                  final initials = parts
+                      .take(2)
+                      .map((e) => e.isNotEmpty ? e[0] : '')
+                      .join()
+                      .toUpperCase();
+
+                  return Column(
+                    children: [
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppColors.primaryGradient,
+                        ),
+                        child: Center(
+                          child: Text(
+                            initials.isEmpty ? 'A' : initials,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        name,
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 16),
-              Text(
-                name,
-                style: TextStyle(
-                  color: textPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+
               const SizedBox(height: 6),
               Container(
                 padding:
@@ -173,6 +273,14 @@ class AdminProfileScreen extends ConsumerWidget {
                         );
                         if (confirmed != true) return;
                         await performLogout();
+                        if (context.mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginRegistrationScreen(),
+                            ),
+                            (_) => false,
+                          );
+                        }
                       },
                       child: Container(
                         width: double.infinity,

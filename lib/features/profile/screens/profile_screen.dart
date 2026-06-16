@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../core/constants/constants.dart';
+import '../../../core/services/session_manager.dart';
 import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
+import '../../learning/repositories/learning_repository.dart';
+import '../../learning/models/lesson_model.dart';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data Models
@@ -48,36 +54,9 @@ class LeaderboardEntry {
 // Mock Data
 // ─────────────────────────────────────────────────────────────────────────────
 
-final _subjects = [
-  SubjectProgress(
-    name: 'AI Fundamentals',
-    icon: Icons.auto_awesome_outlined,
-    completed: 18,
-    total: 25,
-    color: AppColors.primaryDark,
-  ),
-  SubjectProgress(
-    name: 'Data Science',
-    icon: Icons.analytics_outlined,
-    completed: 12,
-    total: 20,
-    color: AppColors.accentQuiz,
-  ),
-  SubjectProgress(
-    name: 'Web Development',
-    icon: Icons.code_outlined,
-    completed: 24,
-    total: 30,
-    color: AppColors.accentMotion,
-  ),
-  SubjectProgress(
-    name: 'Mathematics',
-    icon: Icons.calculate_outlined,
-    completed: 8,
-    total: 15,
-    color: AppColors.warning,
-  ),
-];
+// Recently watched content categories (derived from user_progress + lessons.category)
+// TODO(blackboxai): wire up to Supabase. For now keep an empty state until implemented.
+final _recentWatchedCategories = <String>{};
 
 final _leaderboard = [
   const LeaderboardEntry(rank: 1, name: 'Sarah Chen', handle: '@sarahai', xp: 4850, trendingUp: true),
@@ -162,10 +141,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onAction: () {},
             ),
             const SizedBox(height: AppDimensions.spacingMd),
-            ..._subjects.map((s) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
-                  child: _SubjectProgressCard(subject: s),
-                )),
+            ...(_recentWatchedCategories.isEmpty)
+                ? [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppDimensions.spacingLg),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceDark,
+                          borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+                          border: Border.all(
+                            color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
+                          ),
+                        ),
+                        child: Text(
+                          'No recently watched categories yet.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondaryDark,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]
+                : _recentWatchedCategories
+                    .take(6)
+                    .map((c) => Padding(
+                          padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
+                          child: _CategoryChipCard(category: c),
+                        )),
             const SizedBox(height: AppDimensions.spacingXxl),
 
             // ── Leaderboard Section ──
@@ -453,9 +458,43 @@ class _SectionHeader extends StatelessWidget {
 
 // ── Subject Progress Card ─────────────────────────────────────────────────
 
+class _CategoryChipCard extends StatelessWidget {
+  final String category;
+  const _CategoryChipCard({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    // Simple card-like chip for now; can be enhanced to include count/icon.
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.spacingLg,
+        vertical: AppDimensions.spacingMd,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        border: Border.all(
+          color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
+        ),
+      ),
+      child: Text(
+        category,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimaryDark,
+        ),
+      ),
+    );
+  }
+}
+
 class _SubjectProgressCard extends StatelessWidget {
   final SubjectProgress subject;
   const _SubjectProgressCard({required this.subject});
+
 
   @override
   Widget build(BuildContext context) {

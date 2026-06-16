@@ -1,13 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/constants.dart';
+import '../../../core/services/onboarding_persistence.dart';
 import '../../../core/widgets/main_app_shell.dart';
+import '../../../main.dart';
+
+
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Provider to track onboarding completion
+// Provider to track onboarding completion (persistent via shared_preferences)
 // ─────────────────────────────────────────────────────────────────────────────
 
-final hasCompletedOnboardingProvider = StateProvider<bool>((ref) => false);
+final hasCompletedOnboardingProvider =
+    StateNotifierProvider<HasCompletedOnboardingController, bool>((ref) {
+  final persistence = ref.read(onboardingPersistenceProvider);
+  return HasCompletedOnboardingController(persistence: persistence);
+});
+
+class HasCompletedOnboardingController extends StateNotifier<bool> {
+
+  HasCompletedOnboardingController({required this.persistence}) : super(false) {
+    _init();
+  }
+
+  final dynamic persistence;
+
+  Future<void> _init() async {
+    state = await persistence.readCompleted();
+  }
+
+  Future<void> complete() async {
+    await persistence.writeCompleted();
+    state = true;
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OnboardingScreen — Swipeable slides (first launch only)
@@ -337,22 +366,50 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       setState(() => _errorMsg = 'Please agree to the terms and privacy policy.');
       return;
     }
-    setState(() { _loading = true; _errorMsg = null; });
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-    setState(() => _loading = false);
-    Navigator.of(context).pushAndRemoveUntil(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondary) =>
-            const MainAppShell(),
-        transitionsBuilder: (context, animation, secondary, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 500),
-      ),
-      (_) => false,
-    );
+
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
+
+    final auth = ref.read(authRepositoryProvider);
+
+    try {
+      if (_isLogin) {
+        await auth.signInWithEmailAndPassword(
+          email: _emailCtrl.text.trim(),
+          password: _passwordCtrl.text,
+        );
+      } else {
+        await auth.signUpWithEmailAndPassword(
+          email: _emailCtrl.text.trim(),
+          password: _passwordCtrl.text,
+          fullName: _nameCtrl.text.trim(),
+        );
+      }
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondary) => const MainAppShell(),
+          transitionsBuilder: (context, animation, secondary, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 500),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMsg = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {

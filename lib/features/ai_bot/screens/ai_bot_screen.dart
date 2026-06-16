@@ -202,11 +202,15 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
               ),
             ),
             _SuggestionChips(onTap: _sendSuggestion),
-            _NovaInputBar(
-              controller: _textCtrl,
-              focusNode: _focusNode,
-              isGenerating: isGenerating,
-              onSend: _sendMessage,
+            // Keep nav-like bottom inset handling consistent (avoid double padding).
+            SafeArea(
+              top: false,
+              child: _NovaInputBar(
+                controller: _textCtrl,
+                focusNode: _focusNode,
+                isGenerating: isGenerating,
+                onSend: _sendMessage,
+              ),
             ),
           ],
         ),

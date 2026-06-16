@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/constants.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bottom Navigation Tab Definitions
-// ─────────────────────────────────────────────────────────────────────────────
-
 enum AppTab {
   home(Icons.home_outlined, 'Home'),
   lessons(Icons.menu_book_outlined, 'Lessons'),
@@ -16,10 +12,6 @@ enum AppTab {
   final IconData icon;
   final String label;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AppBottomNav — Bottom navigation bar with prominent center "Add" button
-// ─────────────────────────────────────────────────────────────────────────────
 
 class AppBottomNav extends StatelessWidget {
   final AppTab currentTab;
@@ -41,7 +33,6 @@ class AppBottomNav extends StatelessWidget {
         : AppColors.textSecondaryLight;
 
     return Container(
-      height: AppDimensions.navHeight + MediaQuery.of(context).padding.bottom,
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
@@ -60,41 +51,63 @@ class AppBottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+        child: SizedBox(
+          height: AppDimensions.navHeight,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              _NavItem(
-                tab: AppTab.home,
-                isSelected: currentTab == AppTab.home,
-                selectedColor: selectedColor,
-                unselectedColor: unselectedColor,
-                onTap: () => onTabSelected(AppTab.home),
+              // Background row for all nav items
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _NavItem(
+                        tab: AppTab.home,
+                        isSelected: currentTab == AppTab.home,
+                        selectedColor: selectedColor,
+                        unselectedColor: unselectedColor,
+                        onTap: () => onTabSelected(AppTab.home),
+                      ),
+                      _NavItem(
+                        tab: AppTab.lessons,
+                        isSelected: currentTab == AppTab.lessons,
+                        selectedColor: selectedColor,
+                        unselectedColor: unselectedColor,
+                        onTap: () => onTabSelected(AppTab.lessons),
+                      ),
+                      // Spacer for center button slot
+                      SizedBox(width: AppDimensions.centerButtonSize + 8),
+                      _NavItem(
+                        tab: AppTab.aiBot,
+                        isSelected: currentTab == AppTab.aiBot,
+                        selectedColor: selectedColor,
+                        unselectedColor: unselectedColor,
+                        onTap: () => onTabSelected(AppTab.aiBot),
+                      ),
+                      _NavItem(
+                        tab: AppTab.profile,
+                        isSelected: currentTab == AppTab.profile,
+                        selectedColor: selectedColor,
+                        unselectedColor: unselectedColor,
+                        onTap: () => onTabSelected(AppTab.profile),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              _NavItem(
-                tab: AppTab.lessons,
-                isSelected: currentTab == AppTab.lessons,
-                selectedColor: selectedColor,
-                unselectedColor: unselectedColor,
-                onTap: () => onTabSelected(AppTab.lessons),
-              ),
-              _CenterAddButton(
-                onTap: () => onTabSelected(AppTab.add),
-              ),
-              _NavItem(
-                tab: AppTab.aiBot,
-                isSelected: currentTab == AppTab.aiBot,
-                selectedColor: selectedColor,
-                unselectedColor: unselectedColor,
-                onTap: () => onTabSelected(AppTab.aiBot),
-              ),
-              _NavItem(
-                tab: AppTab.profile,
-                isSelected: currentTab == AppTab.profile,
-                selectedColor: selectedColor,
-                unselectedColor: unselectedColor,
-                onTap: () => onTabSelected(AppTab.profile),
+              // Center button floats above via Stack, not clipped
+              Positioned(
+                top: -16,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _CenterAddButton(
+                    isSelected: currentTab == AppTab.add,
+                    onTap: () => onTabSelected(AppTab.add),
+                  ),
+                ),
               ),
             ],
           ),
@@ -127,11 +140,10 @@ class _NavItem extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: AppDimensions.navHeight - 8,
-          padding: const EdgeInsets.only(top: 8),
+        child: SizedBox(
+          height: AppDimensions.navHeight,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 tab.icon,
@@ -139,16 +151,14 @@ class _NavItem extends StatelessWidget {
                 color: isSelected ? selectedColor : unselectedColor,
               ),
               const SizedBox(height: 4),
-              Flexible(
-                child: Text(
-                  tab.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? selectedColor : unselectedColor,
-                  ),
+              Text(
+                tab.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? selectedColor : unselectedColor,
                 ),
               ),
             ],
@@ -163,8 +173,12 @@ class _NavItem extends StatelessWidget {
 
 class _CenterAddButton extends StatelessWidget {
   final VoidCallback onTap;
+  final bool isSelected;
 
-  const _CenterAddButton({required this.onTap});
+  const _CenterAddButton({
+    required this.onTap,
+    required this.isSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -173,7 +187,6 @@ class _CenterAddButton extends StatelessWidget {
       child: Container(
         width: AppDimensions.centerButtonSize + 8,
         height: AppDimensions.centerButtonSize + 8,
-        margin: const EdgeInsets.only(top: -12),
         decoration: BoxDecoration(
           gradient: AppColors.centerButtonGradient,
           shape: BoxShape.circle,

@@ -401,6 +401,7 @@ class _FeedCardState extends State<_FeedCard> {
   bool _usingVideo = false;
   YoutubePlayerController? _youtubeController;
   bool _usingYoutube = false;
+  String? _videoError;
 
   @override
   void initState() {
@@ -423,6 +424,7 @@ class _FeedCardState extends State<_FeedCard> {
     if (videoUrl == null || videoUrl.isEmpty) return;
 
     try {
+      _videoError = null;
       if (videoUrl.startsWith('yt:')) {
         final videoId = videoUrl.substring(3).trim();
         if (videoId.isEmpty) return;
@@ -469,6 +471,7 @@ class _FeedCardState extends State<_FeedCard> {
       }
     } catch (_) {
       _disposeVideo();
+      _videoError = 'This video could not be loaded. It may have been moved or removed.';
     }
   }
 
@@ -528,7 +531,13 @@ class _FeedCardState extends State<_FeedCard> {
                 return Container(decoration: BoxDecoration(gradient: widget.cardGradient));
               }
               if (_controller!.value.hasError) {
-                return Container(decoration: BoxDecoration(gradient: widget.cardGradient));
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Container(decoration: BoxDecoration(gradient: widget.cardGradient)),
+                    _buildUnavailableOverlay(),
+                  ],
+                );
               }
               return FittedBox(
                 fit: BoxFit.cover,
@@ -544,6 +553,51 @@ class _FeedCardState extends State<_FeedCard> {
           Container(decoration: BoxDecoration(gradient: widget.cardGradient)),
         _buildOverlayContent(lesson),
       ],
+    );
+  }
+
+  Widget _buildUnavailableOverlay() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.play_circle_outline_rounded,
+                  color: Colors.white70, size: 34),
+              const SizedBox(height: 8),
+              const Text(
+                'Video unavailable',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _videoError ?? 'This lesson video could not be loaded.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

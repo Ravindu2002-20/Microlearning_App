@@ -19,10 +19,10 @@ class LessonRepository {
 
   // ── Storage uploads ───────────────────────────────────────────────────────
 
-  Future<String?> uploadVideoToStorage(String filePath, String fileName) async {
+  Future<String?> uploadVideoToStorage(String filePath, String objectPath) async {
     try {
-      await _client.storage.from(_kVideoBucket).upload(fileName, File(filePath));
-      return _client.storage.from(_kVideoBucket).getPublicUrl(fileName);
+      await _client.storage.from(_kVideoBucket).upload(objectPath, File(filePath));
+      return objectPath;
     } catch (e) {
       debugPrint('Video upload error: $e');
       return null;
@@ -77,19 +77,19 @@ class LessonRepository {
 
       if (response == null) return null;
 
-      final lesson = LessonModel.fromJson(response as Map<String, dynamic>);
+      final lesson = LessonModel.fromJson(response);
 
       // Already a full URL — nothing to resolve.
       if (lesson.videoUrl != null && lesson.videoUrl!.startsWith('http')) {
         return lesson;
       }
 
-      // Resolve storage path → signed URL.
+      // Resolve storage path → public object URL.
       final videoPath = response['video_path']?.toString();
       if (videoPath != null && videoPath.isNotEmpty) {
-        final signedUrl = await _signedVideoUrl(videoPath);
-        if (signedUrl != null) {
-          return lesson.copyWith(videoUrl: signedUrl);
+        final publicUrl = _publicVideoUrl(videoPath);
+        if (publicUrl != null) {
+          return lesson.copyWith(videoUrl: publicUrl);
         }
       }
 
@@ -110,7 +110,7 @@ class LessonRepository {
           .maybeSingle();
 
       if (response == null) return null;
-      return VideoModel.fromJson(response as Map<String, dynamic>);
+      return VideoModel.fromJson(response);
     } catch (e) {
       debugPrint('getVideoById error: $e');
       return null;
@@ -121,13 +121,13 @@ class LessonRepository {
 
   Future<void> submitLesson({
     required LessonModel lesson,
-    required String videoUrl,
+    required String videoPath,
     String? thumbnailUrl,
   }) async {
     final lessonId = lesson.id.isEmpty ? const Uuid().v4() : lesson.id;
     final payload = lesson.copyWith(
       id: lessonId,
-      videoUrl: videoUrl,
+      videoUrl: videoPath,
       thumbnailUrl: thumbnailUrl ?? lesson.thumbnailUrl,
       status: 'pending',
       isPublished: false,
@@ -199,11 +199,16 @@ class LessonRepository {
         .eq('is_published', true)
         .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((json) => StorageLesson(
-              LessonModel.fromJson(json as Map<String, dynamic>),
-            ))
-        .toList();
+    return (response as List).map((json) {
+      final row = json as Map<String, dynamic>;
+      final lesson = LessonModel.fromJson(row);
+      final resolvedVideoUrl = _publicVideoUrl(row['video_path']?.toString());
+      return StorageLesson(
+        resolvedVideoUrl == null
+            ? lesson
+            : lesson.copyWith(videoUrl: resolvedVideoUrl),
+      );
+    }).toList();
   }
 
   Future<List<YoutubeVideo>> _fetchYouTubeVideos() async {
@@ -219,29 +224,19 @@ class LessonRepository {
         .toList();
   }
 
-  /// Creates a 1-hour signed URL for a Storage object path.
-  /// [objectPath] e.g. `public/8ce40ace-d4ed-4c3a-a6ad-81136323ef5b/video.mp4`
-  Future<String?> _signedVideoUrl(String objectPath) async {
-    try {
-      // Strip accidental bucket-name prefix if present.
-      final cleanPath = objectPath.startsWith('$_kVideoBucket/')
-          ? objectPath.substring(_kVideoBucket.length + 1)
-          : objectPath;
+  /// Builds the public object URL expected by the lesson player.
+  /// [objectPath] may be `public/<lesson_id>/video.mp4` or just `<lesson_id>/video.mp4`.
+  String? _publicVideoUrl(String? objectPath) {
+    if (objectPath == null) return null;
 
-      return await _client.storage
-          .from(_kVideoBucket)
-          .createSignedUrl(cleanPath, 3600);
-    } catch (e) {
-      debugPrint('_signedVideoUrl error ($objectPath): $e');
-      // Fallback: public URL (works if bucket policy allows it).
-      try {
-        final cleanPath = objectPath.startsWith('$_kVideoBucket/')
-            ? objectPath.substring(_kVideoBucket.length + 1)
-            : objectPath;
-        return _client.storage.from(_kVideoBucket).getPublicUrl(cleanPath);
-      } catch (_) {
-        return null;
-      }
-    }
+    final cleanPath = objectPath.trim();
+    if (cleanPath.isEmpty) return null;
+    if (cleanPath.startsWith('http')) return cleanPath;
+
+    final normalizedPath = cleanPath.startsWith('$_kVideoBucket/')
+        ? cleanPath.substring(_kVideoBucket.length + 1)
+        : cleanPath;
+
+    return _client.storage.from(_kVideoBucket).getPublicUrl(normalizedPath);
   }
 }

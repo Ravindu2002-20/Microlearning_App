@@ -8,10 +8,13 @@ import 'core/services/admin_service.dart';
 import 'core/services/session_manager.dart';
 import 'core/services/theme_service.dart';
 import 'features/auth/repositaries/auth_repository.dart';
+import 'features/auth/repositaries/user_preferences_repository.dart';
 import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/login_registration_screen.dart';
+import 'features/auth/screens/user_details_onboarding_screen.dart';
 import 'core/widgets/main_app_shell.dart';
 import 'core/widgets/admin_app_shell.dart';
+
 
 // ─── Global Providers ───────────────────────────────────────────────────────
 
@@ -19,7 +22,13 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(Supabase.instance.client);
 });
 
+final userPreferencesRepositoryProvider =
+    Provider<UserPreferencesRepository>((ref) {
+  return UserPreferencesRepository(Supabase.instance.client);
+});
+
 // ─── Entry Point ────────────────────────────────────────────────────────────
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,33 +73,16 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
   @override
   void initState() {
     super.initState();
-    // Show splash briefly, then route
-    Future.delayed(const Duration(milliseconds: 1200), _route);
+
+    // Only one navigation source of truth: listen to auth state.
+    // Keep splash visible briefly, but don't route until auth stream has data.
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      // Trigger rebuild so Riverpod listener can start producing events.
+      if (mounted) setState(() {});
+    });
   }
 
-  void _route() async {
-    if (!mounted) return;
-    final user = ref.read(sessionUserProvider);
-    final completedOnboarding = ref.read(hasCompletedOnboardingProvider);
 
-    if (user != null) {
-      // Check admin before routing
-      final isAdmin = await ref.read(isAdminProvider.future);
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()),
-      );
-    } else if (!completedOnboarding) {
-      Navigator.of(context).pushReplacement(
-        _fadeRoute(const OnboardingScreen()),
-      );
-    } else {
-      // Returning user but no session — show auth
-      Navigator.of(context).pushReplacement(
-        _fadeRoute(const LoginRegistrationScreen()),
-      );
-    }
-  }
 
   PageRouteBuilder _fadeRoute(Widget page) {
     return PageRouteBuilder(
@@ -104,13 +96,59 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(sessionUserProvider, (previous, next) {
-      if (previous != null && next == null) {
+    ref.listen(sessionUserProvider, (previous, next) async {
+      // Only navigation source of truth.
+      // The router is driven by the auth stream events.
+      if (!mounted) return;
+
+      // Re-route on logout -> auth
+      final prevUser = previous?.value;
+      final nextUser = next?.value;
+
+      // (If needed, previous/next can be null during loading.)
+
+
+
+
+      if (prevUser != null && nextUser == null) {
         Navigator.of(context).pushAndRemoveUntil(
           _fadeRoute(const LoginRegistrationScreen()),
           (_) => false,
         );
+        return;
       }
+
+      // Re-route on login (null -> user) so admin vs user dashboard swaps
+      if (prevUser == null && nextUser != null) {
+
+        final completedOnboarding = ref.read(hasCompletedOnboardingProvider);
+        if (!completedOnboarding) {
+          Navigator.of(context).pushReplacement(
+            _fadeRoute(const OnboardingScreen()),
+          );
+          return;
+        }
+
+        final prefsRepo = ref.read(userPreferencesRepositoryProvider);
+        final hasUserDetails = await prefsRepo.isOnboardingComplete(nextUser.id);
+
+        if (!mounted) return;
+
+        if (!hasUserDetails) {
+          Navigator.of(context).pushReplacement(
+            _fadeRoute(const UserDetailsOnboardingScreen()),
+          );
+          return;
+        }
+
+        // Check admin before routing
+        final isAdmin = await ref.read(isAdminProvider.future);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()),
+        );
+      }
+
     });
 
     // Branded splash screen

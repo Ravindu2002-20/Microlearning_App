@@ -7,6 +7,8 @@ import '../../../core/constants/constants.dart';
 import '../../../core/services/session_manager.dart';
 import '../../../features/feed/controllers/feed_providers.dart';
 
+
+
 class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback onOpenLessons;
 
@@ -21,9 +23,11 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const _recentSearchKey = 'recent_searches';
+
   final _searchController = TextEditingController();
   List<String> _recentSearches = [];
   bool _loadingSearches = true;
+
   String? _avatarUrl;
   String? _displayName;
   String? _initials;
@@ -42,7 +46,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final user = ref.read(sessionUserProvider);
+    final userAsync = ref.watch(sessionUserProvider);
+    final user = userAsync.asData?.value;
+
+
     final nameFromMeta = _nameFromMetadata(user);
     final avatarFromMeta = _avatarFromMetadata(user);
 
@@ -51,13 +58,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (user != null) {
       try {
-        // Be tolerant to schema differences. Pick the first non-empty name field.
         final profile = await Supabase.instance.client
             .from('profiles')
             .select('full_name, name, username, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
-
 
         if (profile != null) {
           final fullName = (profile['full_name'] as String?)?.trim();
@@ -77,12 +82,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ? avatarCandidate
               : avatarUrl;
         }
-
       } catch (_) {
-        // Fallback to auth metadata and initials when profile row is not available yet.
+        // Use auth metadata fallback.
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _displayName = displayName ?? 'Learner';
       _avatarUrl = avatarUrl;
@@ -94,6 +99,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getStringList(_recentSearchKey) ?? [];
     if (!mounted) return;
+
     setState(() {
       _recentSearches = cached;
       _loadingSearches = false;
@@ -109,19 +115,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
+    // Update recent searches immediately.
     setState(() {
       _recentSearches = [
         query,
-        ..._recentSearches.where((item) => item.toLowerCase() != query.toLowerCase()),
+        ..._recentSearches.where(
+          (item) => item.toLowerCase() != query.toLowerCase(),
+        ),
       ].take(3).toList();
+      _loadingSearches = true;
     });
+
     await _persistRecentSearches();
 
-    // Best-effort backend search to keep this connected to real content.
     try {
+      // Best-effort backend search.
       final repo = ref.read(learningRepositoryProvider);
       final lessons = await repo.searchLessons(query: query);
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -131,12 +143,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
       );
+
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Search submitted for "$query".')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingSearches = false;
+        });
+      }
     }
+
   }
 
   Future<void> _clearRecentSearches() async {
@@ -146,9 +166,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await _persistRecentSearches();
   }
 
-  void _openLessons() {
-    widget.onOpenLessons();
-  }
+  void _openLessons() => widget.onOpenLessons();
+
+
 
   void _showRecommendationSheet(String title) {
     showModalBottomSheet(
@@ -169,7 +189,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   height: 4,
                   decoration: BoxDecoration(
                     color: const Color(0xFFD1D1D6),
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -206,214 +226,233 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    // Match the UI requirement wording.
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   }
 
-
   @override
   Widget build(BuildContext context) {
     final userName = _displayName ?? 'Learner';
-    // Keep header compact so the rest of the content is always visible.
-final headerHeight = 84.0;
-
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Header overflow fix:
+    // Keep header content height constant and apply the safe-area inset exactly once.
+    final topInset = MediaQuery.of(context).padding.top;
+    const headerContentHeight = 65.0;
+    final headerHeight = headerContentHeight + topInset;
+
     return Scaffold(
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Container(
-                height: headerHeight,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _greeting(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Theme.of(context).textTheme.displayMedium?.color ??
-                                      (isDark ? AppColors.textPrimaryDark : Colors.black),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.1,
-                                  letterSpacing: -0.2,
-                                ),
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          children: [
+            SizedBox(
+              height: headerHeight,
+              width: double.infinity,
+              child: Material(
+                color: Theme.of(context).colorScheme.surface,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: topInset,
+                    left: 20,
+                    right: 20,
+                    bottom: 10,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _greeting(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                        .textTheme
+                                        .displayMedium
+                                        ?.color ??
+                                    (isDark
+                                        ? AppColors.textPrimaryDark
+                                        : Colors.black),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                                letterSpacing: -0.2,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '$userName 👋',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Theme.of(context).textTheme.displayLarge?.color ??
-                                      (isDark ? AppColors.textPrimaryDark : Colors.black),
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.1,
-                                  letterSpacing: -0.3,
-                                ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$userName 👋',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Theme.of(context)
+                                        .textTheme
+                                        .displayLarge
+                                        ?.color ??
+                                    (isDark
+                                        ? AppColors.textPrimaryDark
+                                        : Colors.black),
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                                letterSpacing: -0.3,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        _ProfileAvatar(
-                          imageUrl: _avatarUrl,
-                          initials: _initials ?? 'U',
+                      ),
+                      const SizedBox(width: 12),
+                      _ProfileAvatar(
+                        imageUrl: _avatarUrl,
+                        initials: _initials ?? 'U',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                children: [
+                  _SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionTitle(
+                          title: 'Recent Searches',
+                          action:
+                              _recentSearches.isEmpty ? null : 'Clear',
+                          onAction: _recentSearches.isEmpty
+                              ? null
+                              : _clearRecentSearches,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SearchField(
+                                controller: _searchController,
+                                onClear: () => _searchController.clear(),
+                                onSubmitted: (_) => _onSearch(),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            InkWell(
+                              onTap: _onSearch,
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 8,
+                                  
+                                ),
+                                child: Text(
+                                  'Search',
+                                  style: TextStyle(
+                                    color: Color(0xFF5B5FEF),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (_loadingSearches)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: LinearProgressIndicator(minHeight: 2),
+                          )
+                        else if (_recentSearches.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 18),
+                            child: Center(
+                              child: Text(
+                                'No Recent Searches',
+                                style: TextStyle(
+                                  color: AppColors.textSecondaryLight,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          ..._recentSearches.asMap().entries.map((entry) {
+                            final isLast =
+                                entry.key == _recentSearches.length - 1;
+                            return Column(
+                              children: [
+                                _RecentSearchRow(label: entry.value),
+                                if (!isLast)
+                                  const Divider(height: 1, thickness: 1),
+                              ],
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionHeaderRow(
+                          title: 'Recommended For You',
+                          actionLabel: 'More',
+                          onTapAction: _openLessons,
+                        ),
+                        const SizedBox(height: 14),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _recommendedLessons.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 1.05,
+                          ),
+                          itemBuilder: (context, index) {
+                            final item = _recommendedLessons[index];
+                            return _RecommendationCard(
+                              item: item,
+                              onTap: _openLessons,
+                              onMore: () => _showRecommendationSheet(item.title),
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  ..._challengeCards.map(
+                    (card) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _ChallengeCard(
+                        title: card.title,
+                        subtitle: card.subtitle,
+                        accent: card.accent,
+                        questions: card.questions,
+                        xp: card.xp,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const _XpProgressCard(),
+                ],
               ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  children: [
-
-                    _SectionCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionTitle(
-                            title: 'Recent Searches',
-                            action: _recentSearches.isEmpty ? null : 'Clear',
-                            onAction: _recentSearches.isEmpty ? null : _clearRecentSearches,
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _SearchField(
-                                  controller: _searchController,
-                                  onClear: () => _searchController.clear(),
-                                  onSubmitted: (_) => _onSearch(),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              InkWell(
-                                onTap: _onSearch,
-                                child: const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                                  child: Text(
-                                    'Search',
-                                    style: TextStyle(
-                                      color: Color(0xFF5B5FEF),
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          if (_loadingSearches)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 10),
-                              child: LinearProgressIndicator(minHeight: 2),
-                            )
-                          else if (_recentSearches.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 18),
-                              child: Center(
-                                child: Text(
-                                  'No Recent Searches',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondaryLight,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            )
-                          else
-                            ..._recentSearches.asMap().entries.map((entry) {
-                              final isLast = entry.key == _recentSearches.length - 1;
-                              return Column(
-                                children: [
-                                  _RecentSearchRow(label: entry.value),
-                                  if (!isLast)
-                                    const Divider(height: 1, thickness: 1),
-                                ],
-                              );
-                            }),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _SectionHeaderRow(
-                            title: 'Recommended For You',
-                            actionLabel: 'More',
-                            onTapAction: _openLessons,
-                          ),
-                          const SizedBox(height: 14),
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _recommendedLessons.length,
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 1.05,
-                            ),
-                            itemBuilder: (context, index) {
-                              final item = _recommendedLessons[index];
-                              return _RecommendationCard(
-                                item: item,
-                                onTap: _openLessons,
-                                onMore: () => _showRecommendationSheet(item.title),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ..._challengeCards.map(
-                      (card) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _ChallengeCard(
-                          title: card.title,
-                          subtitle: card.subtitle,
-                          accent: card.accent,
-                          questions: card.questions,
-                          xp: card.xp,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const _XpProgressCard(),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -435,9 +474,15 @@ final headerHeight = 84.0;
   }
 
   String _initialsFor(String value) {
-    final parts = value.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return 'U';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
 }
@@ -577,7 +622,7 @@ class _SearchField extends StatelessWidget {
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : const Color(0xFFF2F2F7),
+        color: const Color.fromARGB(255, 81, 85, 99),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -585,7 +630,9 @@ class _SearchField extends StatelessWidget {
           Icon(
             Icons.access_time_rounded,
             size: 18,
-            color: isDark ? AppColors.textSecondaryDark.withValues(alpha: 0.8) : const Color(0xFF8E8E93),
+            color: isDark
+                ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
+                : const Color(0xFF8E8E93),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -596,7 +643,6 @@ class _SearchField extends StatelessWidget {
                 color: isDark ? AppColors.textPrimaryDark : Colors.black,
               ),
               decoration: InputDecoration(
-                border: InputBorder.none,
                 isDense: true,
                 hintText: 'Search courses...',
                 hintStyle: TextStyle(
@@ -604,6 +650,9 @@ class _SearchField extends StatelessWidget {
                       ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
                       : const Color(0xFF8E8E93),
                 ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
               ),
             ),
           ),
@@ -636,19 +685,21 @@ class _RecentSearchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          const Icon(Icons.access_time_rounded, size: 18, color: Color(0xFF8E8E93)),
+          const Icon(Icons.access_time_rounded,
+              size: 18, color: Color(0xFF8E8E93)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Colors.black,
+                color: isDark ? AppColors.textPrimaryDark : Colors.black,
               ),
             ),
           ),
@@ -688,7 +739,10 @@ class _RecommendationCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.7)
+                  ],
                 ),
               ),
             ),
@@ -748,6 +802,7 @@ class _ChallengeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tint = accent.withValues(alpha: 0.10);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -763,7 +818,8 @@ class _ChallengeCard extends StatelessWidget {
               color: accent,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.quiz_rounded, color: Colors.white, size: 22),
+            child:
+                const Icon(Icons.quiz_rounded, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -772,10 +828,10 @@ class _ChallengeCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black,
+                    color: isDark ? AppColors.textPrimaryDark : Colors.black,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -800,14 +856,18 @@ class _ChallengeCard extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: accent,
               borderRadius: BorderRadius.circular(999),
             ),
             child: const Text(
               'Start',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -821,10 +881,13 @@ class _XpProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor = isDark ? AppColors.textPrimaryDark : Colors.black;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppColors.surfaceDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -853,8 +916,23 @@ class _XpProgressCard extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Lvl', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w700)),
-                          Text('7', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800, height: 1)),
+                          Text(
+                            'Lvl',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            '7',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              height: 1,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -862,17 +940,36 @@ class _XpProgressCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total XP', style: TextStyle(color: Color(0xFF8E8E93), fontWeight: FontWeight.w600)),
-                    SizedBox(height: 4),
-                    Text('3,450', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.black)),
-                    SizedBox(height: 8),
-                    _GradientProgressBar(fraction: 0.7),
-                    SizedBox(height: 6),
-                    Text('680 XP to Level 8', style: TextStyle(color: Color(0xFF5B5FEF), fontWeight: FontWeight.w700)),
+                    const Text(
+                      'Total XP',
+                      style: TextStyle(
+                        color: Color(0xFF8E8E93),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '3,450',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const _GradientProgressBar(fraction: 0.7),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '680 XP to Level 8',
+                      style: TextStyle(
+                        color: Color(0xFF5B5FEF),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -883,34 +980,55 @@ class _XpProgressCard extends StatelessWidget {
                   color: Color(0xFFFFE5D6),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFFF7043)),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Color(0xFFFF7043),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          const Text('This Week', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black)),
+          Text(
+            'This Week',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: primaryTextColor,
+            ),
+          ),
           const SizedBox(height: 12),
-          _WeeklyBars(),
+          const _WeeklyBars(),
           const SizedBox(height: 16),
           Row(
             children: [
-              const Icon(Icons.local_fire_department_rounded, color: Color(0xFFFF7043), size: 18),
+              const Icon(
+                Icons.local_fire_department_rounded,
+                color: Color(0xFFFF7043),
+                size: 18,
+              ),
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
                   '7-day streak — Keep it going!',
-                  style: TextStyle(color: Color(0xFFFF7043), fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: Color(0xFFFF7043),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF7043),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: const Text(
                   '+100 XP Bonus',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
@@ -951,10 +1069,13 @@ class _GradientProgressBar extends StatelessWidget {
 }
 
 class _WeeklyBars extends StatelessWidget {
+  const _WeeklyBars();
+
   @override
   Widget build(BuildContext context) {
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const heights = [48.0, 62.0, 56.0, 70.0, 28.0, 60.0, 66.0];
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -972,7 +1093,15 @@ class _WeeklyBars extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(labels[index], style: const TextStyle(fontSize: 10, color: Color(0xFF8E8E93))),
+            const Text(
+              // visual only
+              '',
+              style: TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
+            ),
+            Text(
+              labels[index],
+              style: const TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
+            ),
           ],
         );
       }),
@@ -984,14 +1113,10 @@ class _ProfileAvatar extends StatelessWidget {
   final String? imageUrl;
   final String initials;
 
-  const _ProfileAvatar({
-    required this.imageUrl,
-    required this.initials,
-  });
+  const _ProfileAvatar({required this.imageUrl, required this.initials});
 
   @override
   Widget build(BuildContext context) {
-    // Keep a fixed circle size as requested.
     return Container(
       width: 56,
       height: 56,
@@ -1113,3 +1238,4 @@ const _challengeCards = [
     xp: 40,
   ),
 ];
+

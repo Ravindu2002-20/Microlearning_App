@@ -134,7 +134,8 @@ class LessonRepository {
       createdAt: lesson.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );
-    await _client.from('lessons').upsert(payload.toJson());
+    await _client.from('lessons').insert(payload.toJson());
+
   }
 
   Future<List<LessonModel>> getApprovedLessons() async {

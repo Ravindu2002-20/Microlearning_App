@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/constants.dart';
 import '../../../features/auth/repositaries/auth_repository.dart';
 import '../../../main.dart';
-import '../../../core/widgets/main_app_shell.dart';
+
 
 /// Login / Registration Screen (login + register) used by auth flow.
 class LoginRegistrationScreen extends ConsumerStatefulWidget {
@@ -59,17 +59,17 @@ class _LoginRegistrationScreenState
       }
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainAppShell()),
-        (_) => false,
-      );
+      // Router (_AppRouter) handles post-login navigation.
+
     } catch (e) {
       if (!mounted) return;
       setState(() => _errorMsg = e.toString());
     } finally {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
+
   }
 
   @override

@@ -19,16 +19,17 @@ final hasCompletedOnboardingProvider =
   return HasCompletedOnboardingController(persistence: persistence);
 });
 
-class HasCompletedOnboardingController extends StateNotifier<bool> {
 
+class HasCompletedOnboardingController extends StateNotifier<bool> {
   HasCompletedOnboardingController({required this.persistence}) : super(false) {
     _init();
   }
 
-  final dynamic persistence;
+  final OnboardingPersistence persistence;
 
   Future<void> _init() async {
-    state = await persistence.readCompleted();
+    final completed = await persistence.readCompleted();
+    state = completed;
   }
 
   Future<void> complete() async {
@@ -36,6 +37,8 @@ class HasCompletedOnboardingController extends StateNotifier<bool> {
     state = true;
   }
 }
+
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────

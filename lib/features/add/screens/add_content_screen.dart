@@ -59,16 +59,79 @@ class _AddContentScreenState extends ConsumerState<AddContentScreen>
             fontWeight: FontWeight.w700,
           ),
         ),
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: AppColors.primaryDark,
-          unselectedLabelColor:
-              isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-          indicatorColor: AppColors.primaryDark,
-          tabs: const [
-            Tab(text: 'Upload Lesson'),
-            Tab(text: 'My Uploads'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(64),
+          child: SafeArea(
+            bottom: false,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  tabAlignment: TabAlignment.start,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: isDark
+                      ? AppColors.textSecondaryDark
+                      : AppColors.textSecondaryLight,
+                  indicator: BoxDecoration(
+                    color: AppColors.primaryDark,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 6),
+                      )
+                    ],
+                  ),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicatorWeight: 0, // use custom indicator decoration
+                  dividerColor: Colors.transparent,
+                  tabs: [
+                    Tab(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Upload Lesson',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Tab(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'My Uploads',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
       body: TabBarView(
@@ -80,7 +143,7 @@ class _AddContentScreenState extends ConsumerState<AddContentScreen>
               _tabController.animateTo(1);
             },
           ),
-          const _MyUploadsTab(),
+          _MyUploadsTab(),
         ],
       ),
     );
@@ -227,7 +290,7 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
         isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
       child: Form(
         key: _formKey,
         child: Column(
@@ -671,8 +734,8 @@ class _MyUploadsTab extends ConsumerWidget {
 
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(_myUploadsProvider),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
+            child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(24, 18, 24, 26),
             itemCount: lessons.length,
             itemBuilder: (context, index) {
               return _UploadCard(lesson: lessons[index]);

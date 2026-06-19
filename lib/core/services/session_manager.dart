@@ -8,9 +8,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Provides the current Supabase User if a session exists (cached locally).
 /// On app startup, Supabase restores the session from local storage automatically.
 /// This provider reads that restored state.
-final sessionUserProvider = Provider<User?>((ref) {
-  return Supabase.instance.client.auth.currentUser;
+// Auth state stream → current user (updates on login/logout)
+final sessionUserProvider = StreamProvider<User?>((ref) {
+  return Supabase.instance.client.auth.onAuthStateChange.map(
+    (event) => event.session?.user,
+  );
 });
+
+final sessionUserValueProvider = Provider<User?>((ref) {
+  return ref.watch(sessionUserProvider).maybeWhen(
+        data: (user) => user,
+        orElse: () => null,
+      );
+});
+
+
 
 /// Global logout action
 final logoutProvider = Provider<void Function()>((ref) {

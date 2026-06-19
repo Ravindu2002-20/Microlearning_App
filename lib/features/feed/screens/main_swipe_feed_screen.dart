@@ -248,7 +248,9 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final contextAsync = ref.watch(contextStateStreamProvider);
-    final user = ref.watch(sessionUserProvider);
+    final userAsync = ref.watch(sessionUserProvider);
+    final user = userAsync.asData?.value;
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return contextAsync.when(

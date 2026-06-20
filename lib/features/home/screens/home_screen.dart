@@ -46,7 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadProfile() async {
-    final userAsync = ref.watch(sessionUserProvider);
+final userAsync = ref.read(sessionUserProvider);
     final user = userAsync.asData?.value;
 
 
@@ -58,21 +58,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (user != null) {
       try {
-        final profile = await Supabase.instance.client
+          final profile = await Supabase.instance.client
             .from('profiles')
-            .select('full_name, name, username, avatar_url')
+            .select('full_name, username, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
 
         if (profile != null) {
           final fullName = (profile['full_name'] as String?)?.trim();
-          final name = (profile['name'] as String?)?.trim();
           final username = (profile['username'] as String?)?.trim();
 
           if (fullName != null && fullName.isNotEmpty) {
             displayName = fullName;
-          } else if (name != null && name.isNotEmpty) {
-            displayName = name;
           } else if (username != null && username.isNotEmpty) {
             displayName = username;
           }

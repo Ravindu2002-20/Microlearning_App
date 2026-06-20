@@ -135,9 +135,21 @@ class LearningRepository {
           if (ambientContext.isInMotion && !l.safeForMotion) {
             return false;
           }
-          if (ambientContext.networkStrength == AppNetworkStrength.weak &&
-              l.format == 'video') {
-            return false;
+          switch (ambientContext.networkStrength) {
+            case AppNetworkStrength.weak:
+              // Only weak-tagged content qualifies; untagged excluded (Option B).
+              if (l.minNetworkStrength != 'weak') return false;
+              break;
+            case AppNetworkStrength.medium:
+              // Weak- or medium-tagged content qualifies; untagged excluded.
+              if (l.minNetworkStrength != 'weak' &&
+                  l.minNetworkStrength != 'medium') {
+                return false;
+              }
+              break;
+            case AppNetworkStrength.strong:
+              // No filter — everything cached qualifies.
+              break;
           }
           return true;
         }).toList();
@@ -211,12 +223,28 @@ class LearningRepository {
     required String userUuid,
     required UserContextState ambientContext,
   }) async {
+    // Fetch the user's selected learning categories to scope recommendations.
+    List<String> categories = [];
+    try {
+      final prefsRow = await _supabase
+          .from('user_preferences')
+          .select('selected_categories')
+          .eq('user_id', userUuid)
+          .maybeSingle();
+      categories =
+          (prefsRow?['selected_categories'] as List<dynamic>?)?.cast<String>() ??
+              [];
+    } catch (e) {
+      debugPrint('Failed to load user categories for feed filtering: $e');
+    }
+
     // Completed lesson UUIDs to exclude.
     final completedRows = await _supabase
         .from('user_progress')
         .select('lesson_id')
         .eq('user_id', userUuid)
         .eq('is_completed', true);
+
 
     final completedIds = (completedRows as List<dynamic>)
         .map((row) => (row as Map<String, dynamic>)['lesson_id']?.toString())
@@ -228,8 +256,9 @@ class LearningRepository {
       _fetchApprovedLessons(
         ambientContext: ambientContext,
         completedIds: completedIds,
+        categories: categories,
       ),
-      _fetchYouTubeVideos(),
+      _fetchYouTubeVideos(categories: categories),
     ]);
 
     final lessons = results[0];
@@ -250,6 +279,7 @@ class LearningRepository {
   Future<List<LessonModel>> _fetchApprovedLessons({
     required UserContextState ambientContext,
     required List<String> completedIds,
+    List<String> categories = const [],
   }) async {
     try {
       var query = _supabase
@@ -258,9 +288,16 @@ class LearningRepository {
           .eq('status', 'approved')
           .eq('is_published', true);
 
+      // Only filter by category if the user has selected any — an empty
+      // list means "no preference set," not "match nothing."
+      if (categories.isNotEmpty) {
+        query = query.inFilter('category', categories);
+      }
+
       if (completedIds.isNotEmpty) {
         query = query.not('id', 'in', completedIds);
       }
+
 
       if (ambientContext.isInMotion) {
         query = query.eq('safe_for_motion', true);
@@ -268,9 +305,10 @@ class LearningRepository {
 
       switch (ambientContext.networkStrength) {
         case AppNetworkStrength.weak:
-          query = query
-              .eq('min_network_strength', 'weak')
-              .neq('format', 'video');
+          // Weak signal: only content explicitly tagged safe for weak signal.
+          // Untagged rows are excluded (Option B — untagged = treated as
+          // requiring strong signal).
+          query = query.eq('min_network_strength', 'weak');
           break;
         case AppNetworkStrength.medium:
           query = query
@@ -315,13 +353,19 @@ class LearningRepository {
   ///
   /// The `video_url` field is set to `yt:<youtube_video_id>` so downstream
   /// players know to use the YouTube player instead of Chewie.
-  Future<List<LessonModel>> _fetchYouTubeVideos() async {
+  Future<List<LessonModel>> _fetchYouTubeVideos({
+    List<String> categories = const [],
+  }) async {
     try {
-      final response = await _supabase
-          .from('videos')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(10);
+      var query = _supabase.from('videos').select();
+
+      if (categories.isNotEmpty) {
+        query = query.inFilter('topic', categories);
+      }
+
+      final response =
+          await query.order('created_at', ascending: false).limit(10);
+
 
       return (response as List<dynamic>).map((row) {
         final v = VideoModel.fromJson(row as Map<String, dynamic>);

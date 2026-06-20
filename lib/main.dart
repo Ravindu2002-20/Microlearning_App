@@ -35,7 +35,8 @@ void main() async {
 
   await Supabase.initialize(
     url: 'https://qjbcmjmaowvxlitvzrqh.supabase.co',
-    anonKey:
+    publishableKey:
+
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqYmNtam1hb3d2eGxpdHZ6cnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzY0NzcsImV4cCI6MjA5NTYxMjQ3N30.uCC1_9uupE4GULc0_eAqxiQyMPnvU0m6KmDcHGfTma4',
   );
 
@@ -63,7 +64,10 @@ class MyApp extends ConsumerWidget {
 // ─── App Router — Manages splash → onboarding → auth → home flow ──────────
 
 class _AppRouter extends ConsumerStatefulWidget {
-  const _AppRouter({super.key});
+  const _AppRouter();
+
+
+
 
   @override
   ConsumerState<_AppRouter> createState() => _AppRouterState();
@@ -102,8 +106,8 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
       if (!mounted) return;
 
       // Re-route on logout -> auth
-      final prevUser = previous?.value;
-      final nextUser = next?.value;
+      final prevUser = previous?.valueOrNull;
+      final nextUser = next.valueOrNull;
 
       // (If needed, previous/next can be null during loading.)
 
@@ -120,9 +124,10 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
 
       // Re-route on login (null -> user) so admin vs user dashboard swaps
       if (prevUser == null && nextUser != null) {
-
         final completedOnboarding = ref.read(hasCompletedOnboardingProvider);
         if (!completedOnboarding) {
+          if (!mounted) return;
+          // ignore: use_build_context_synchronously
           Navigator.of(context).pushReplacement(
             _fadeRoute(const OnboardingScreen()),
           );
@@ -133,8 +138,9 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
         final hasUserDetails = await prefsRepo.isOnboardingComplete(nextUser.id);
 
         if (!mounted) return;
-
         if (!hasUserDetails) {
+          if (!mounted) return;
+          // ignore: use_build_context_synchronously
           Navigator.of(context).pushReplacement(
             _fadeRoute(const UserDetailsOnboardingScreen()),
           );
@@ -143,11 +149,15 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
 
         // Check admin before routing
         final isAdmin = await ref.read(isAdminProvider.future);
+
         if (!mounted) return;
+        // ignore: use_build_context_synchronously
         Navigator.of(context).pushReplacement(
           _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()),
         );
       }
+
+
 
     });
 
@@ -188,7 +198,10 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
 }
 
 class _SplashLogo extends StatefulWidget {
-  const _SplashLogo();
+  const _SplashLogo({super.key});
+
+
+
 
   @override
   State<_SplashLogo> createState() => _SplashLogoState();

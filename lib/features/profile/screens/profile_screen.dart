@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/constants.dart';
-import '../../../core/services/session_manager.dart';
+
 import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
 import '../../auth/screens/login_registration_screen.dart';
 import '../../learning/repositories/learning_repository.dart';
-import '../../learning/models/lesson_model.dart';
-import '../../admin/screens/admin_profile_screen.dart';
+
+
 import '../../admin/screens/admin_review_screen.dart';
 import '../../../core/services/admin_service.dart';
 
@@ -565,94 +565,18 @@ class _CategoryChipCard extends StatelessWidget {
   }
 }
 
-class _SubjectProgressCard extends StatelessWidget {
-  final SubjectProgress subject;
-  const _SubjectProgressCard({required this.subject});
+// NOTE: _SubjectProgressCard is currently unused.
+// It was partially commented out but left behind invalid Dart code.
+// Commenting out the entire widget to restore analyzer/build stability.
+// NOTE: _SubjectProgressCard is currently unused.
+// The previous code was partially commented out and left the file with an
+// invalid (unterminated) multi-line comment, which breaks parsing.
+//
+// Re-enable this widget later when it’s ready to display.
 
 
-  @override
-  Widget build(BuildContext context) {
-    final fraction = subject.fraction;
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.spacingLg),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
-        border: Border.all(
-          color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: subject.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
-                ),
-                child: Icon(
-                  subject.icon,
-                  color: subject.color,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spacingMd),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subject.name,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimaryDark,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${subject.completed}/${subject.total} Lessons',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondaryDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '${(fraction * 100).round()}%',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: subject.color,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacingMd),
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-            child: LinearProgressIndicator(
-              minHeight: 6,
-              value: fraction,
-              backgroundColor: AppColors.textSecondaryDark.withValues(alpha: 0.08),
-              valueColor: AlwaysStoppedAnimation<Color>(subject.color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
-// ── Leaderboard Section ───────────────────────────────────────────────────
+// ── Leaderboard Section
 
 class _LeaderboardSection extends StatelessWidget {
   final bool showWeekly;
@@ -830,6 +754,7 @@ class _LeaderboardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingSm),
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimensions.spacingMd,

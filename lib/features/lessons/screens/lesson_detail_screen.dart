@@ -31,12 +31,9 @@ class LessonDetailScreen extends StatefulWidget {
 
   /// Navigate from the dashboard (preferred) — zero extra network calls for
   /// YouTube items.
-  // ignore: prefer_const_constructors_in_immutables
   LessonDetailScreen({super.key, required LessonItem item})
       : _source = _SourceItem(item) as _Source; // workaround: see init
 
-  // ignore: use_super_parameters
-  // ignore: prefer_const_constructors_in_immutables
   LessonDetailScreen._raw({Key? key, required _Source source})
       : _source = source,
         super(key: key);

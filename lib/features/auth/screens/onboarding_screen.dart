@@ -20,6 +20,7 @@ final hasCompletedOnboardingProvider =
 });
 
 
+
 class HasCompletedOnboardingController extends StateNotifier<bool> {
   HasCompletedOnboardingController({required this.persistence}) : super(false) {
     _init();
@@ -28,9 +29,13 @@ class HasCompletedOnboardingController extends StateNotifier<bool> {
   final OnboardingPersistence persistence;
 
   Future<void> _init() async {
-    final completed = await persistence.readCompleted();
-    state = completed;
+    state = await persistence.readCompleted();
+    if (state != true) state = false;
   }
+
+
+
+
 
   Future<void> complete() async {
     await persistence.writeCompleted();
@@ -96,11 +101,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _goToAuth() {
-    ref.read(hasCompletedOnboardingProvider.notifier).state = true;
+    ref.read(hasCompletedOnboardingProvider.notifier).complete();
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondary) =>
             const AuthScreen(),
+
         transitionsBuilder: (context, animation, secondary, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -229,12 +235,14 @@ class _SlideData {
   final IconData icon;
   final String headline;
   final String subtitle;
+
   const _SlideData({
     required this.icon,
     required this.headline,
     required this.subtitle,
   });
 }
+
 
 class _SlideContent extends StatelessWidget {
   final _SlideData slide;
@@ -606,10 +614,19 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   // ── Shared widgets ─────────────────────────────────────────────────────
 
-  Widget _buildField({required controller, required String label, required IconData icon,
-      bool obscure = false, String? Function(String?)? validator, void Function(String)? onChanged}) {
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool obscure = false,
+    String? Function(String?)? validator,
+    void Function(String)? onChanged,
+  }) {
     return TextFormField(
-      controller: controller, obscureText: obscure, onChanged: onChanged,
+      controller: controller,
+      obscureText: obscure,
+      onChanged: onChanged,
+
       style: const TextStyle(color: AppColors.textPrimaryDark, fontSize: 16),
       decoration: InputDecoration(
         labelText: label,

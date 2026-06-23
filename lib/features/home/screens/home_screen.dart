@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/constants.dart';
+
 import '../../../core/services/session_manager.dart';
 import '../../../features/feed/controllers/feed_providers.dart';
 
@@ -11,11 +12,14 @@ import '../../../features/feed/controllers/feed_providers.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback onOpenLessons;
+  final VoidCallback onOpenProfileTab;
 
   const HomeScreen({
     super.key,
     required this.onOpenLessons,
+    required this.onOpenProfileTab,
   });
+
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -112,14 +116,14 @@ final userAsync = ref.read(sessionUserProvider);
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
-    // Update recent searches immediately.
+    // Update recent searches immediately (keep full history).
     setState(() {
       _recentSearches = [
         query,
         ..._recentSearches.where(
           (item) => item.toLowerCase() != query.toLowerCase(),
         ),
-      ].take(3).toList();
+      ];
       _loadingSearches = true;
     });
 
@@ -162,6 +166,137 @@ final userAsync = ref.read(sessionUserProvider);
     });
     await _persistRecentSearches();
   }
+
+  Future<void> _onRecentSearchTap(String query) async {
+    // Put tapped search at the top (dedupe) and keep full history.
+    setState(() {
+      _recentSearches = [
+        query,
+        ..._recentSearches.where(
+          (item) => item.toLowerCase() != query.toLowerCase(),
+        ),
+      ];
+      _searchController.text = query;
+      _loadingSearches = true;
+    });
+
+    await _persistRecentSearches();
+
+    // Run search again.
+    await _onSearch();
+  }
+
+  Future<void> _showAllRecentSearches() async {
+    // Always read from persistence so "View All Searches" reflects the full history,
+    // not only what is currently loaded in-memory.
+    final prefs = await SharedPreferences.getInstance();
+    final all = prefs.getStringList(_recentSearchKey) ?? <String>[];
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final height = MediaQuery.of(ctx).size.height * 0.75;
+        return SafeArea(
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundDark,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.textSecondaryDark.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'All Searches',
+                        style: TextStyle(
+                          color: AppColors.textPrimaryDark,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () async {
+                          Navigator.of(ctx).pop();
+                          setState(() => _recentSearches = []);
+                          await _persistRecentSearches();
+                        },
+                        child: const Text(
+                          'Clear All',
+                          style: TextStyle(
+                            color: Color(0xFF5B5FEF),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: all.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No searches yet.',
+                            style: TextStyle(
+                              color: AppColors.textSecondaryDark,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: all.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1),
+                          itemBuilder: (context, index) {
+                            final q = all[index];
+                            return ListTile(
+                              leading: const Icon(Icons.access_time_rounded),
+                              title: Text(
+                                q,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimaryDark,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              onTap: () async {
+                                Navigator.of(ctx).pop();
+                                await _onRecentSearchTap(q);
+                              },
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 6),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+
 
   void _openLessons() => widget.onOpenLessons();
 
@@ -306,9 +441,19 @@ final userAsync = ref.read(sessionUserProvider);
                         ),
                       ),
                       const SizedBox(width: 12),
-                      _ProfileAvatar(
-                        imageUrl: _avatarUrl,
-                        initials: _initials ?? 'U',
+                      GestureDetector(
+                        onTap: () {
+                          // Switch to Profile tab.
+                          // (MainAppShell must own/hold the tab state.)
+                          // For now, push a profile route so the user can see their data.
+                          // Switch to Profile tab inside MainAppShell.
+                        widget.onOpenProfileTab();
+                        },
+
+                        child: _ProfileAvatar(
+                          imageUrl: _avatarUrl,
+                          initials: _initials ?? 'U',
+                        ),
                       ),
                     ],
                   ),
@@ -382,17 +527,44 @@ final userAsync = ref.read(sessionUserProvider);
                             ),
                           )
                         else
-                          ..._recentSearches.asMap().entries.map((entry) {
-                            final isLast =
-                                entry.key == _recentSearches.length - 1;
+                          ..._recentSearches
+                              .take(3)
+                              .toList()
+                              .asMap()
+                              .entries
+                              .map((entry) {
+                            final displayed = _recentSearches.take(3).toList();
+                            final isLast = entry.key == displayed.length - 1;
+                            final q = entry.value;
+
                             return Column(
                               children: [
-                                _RecentSearchRow(label: entry.value),
+                                _RecentSearchRow(
+                                  label: q,
+                                  onTap: () => _onRecentSearchTap(q),
+                                ),
                                 if (!isLast)
                                   const Divider(height: 1, thickness: 1),
                               ],
                             );
                           }),
+
+
+                        if (!_loadingSearches && _recentSearches.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          GestureDetector(
+                            onTap: _showAllRecentSearches,
+                            child: const Center(
+                              child: Text(
+                                'View All Searches',
+                                style: TextStyle(
+                                  color: Color(0xFF5B5FEF),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -677,34 +849,44 @@ class _SearchField extends StatelessWidget {
 
 class _RecentSearchRow extends StatelessWidget {
   final String label;
+  final VoidCallback onTap;
 
-  const _RecentSearchRow({required this.label});
+  const _RecentSearchRow({
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          const Icon(Icons.access_time_rounded,
-              size: 18, color: Color(0xFF8E8E93)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textPrimaryDark : Colors.black,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Row(
+          children: [
+            const Icon(Icons.access_time_rounded,
+                size: 18, color: Color(0xFF8E8E93)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimaryDark : Colors.black,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+
 
 class _RecommendationCard extends StatelessWidget {
   final _RecommendedLesson item;

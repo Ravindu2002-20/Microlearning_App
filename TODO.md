@@ -1,10 +1,9 @@
-# TODO
+# TODO - Microlearning App
 
-- [ ] Fix initial navigation flow in `lib/main.dart` so:
-  - Onboarding shows only once (fresh install), then goes to login.
-  - If user is already logged in (session restored), skip onboarding + login and go directly to the app.
-  - After login, do not show login/onboarding again on app reopen until explicit logout.
-  - Ensure only one navigation happens during initial startup.
-
-- [ ] Test manually (fresh install / relaunch / logout) and verify routing behavior.
+## Search history + navigation fixes
+- [x] Inspect current HomeScreen search history and profile icon behavior.
+- [x] Inspect MainAppShell tab/navigation ownership.
+- [ ] Update HomeScreen “Recent Searches” to display only the latest 3 items (while keeping full history for “View All Searches”).
+- [ ] Fix profile avatar tap to switch to Profile tab inside MainAppShell (instead of pushing ProfileScreen route) so bottom navigation remains.
+- [ ] Run `flutter analyze` to confirm no build/lint issues.
 

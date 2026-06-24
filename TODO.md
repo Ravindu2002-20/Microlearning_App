@@ -1,9 +1,7 @@
-# TODO - Microlearning App
+# TODO
 
-## Search history + navigation fixes
-- [x] Inspect current HomeScreen search history and profile icon behavior.
-- [x] Inspect MainAppShell tab/navigation ownership.
-- [ ] Update HomeScreen “Recent Searches” to display only the latest 3 items (while keeping full history for “View All Searches”).
-- [ ] Fix profile avatar tap to switch to Profile tab inside MainAppShell (instead of pushing ProfileScreen route) so bottom navigation remains.
-- [ ] Run `flutter analyze` to confirm no build/lint issues.
+- [ ] Fix MainAppShell tab-to-screen mapping (ensure AppTab.lessons/add/aiBot/profile show the correct screens)
+- [ ] Verify AppTab index ordering aligns with MainAppShell IndexedStack ordering
+- [ ] Run `flutter analyze` to ensure build passes
+- [ ] Run app and manually verify bottom navigation switches correctly
 

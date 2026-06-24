@@ -23,16 +23,20 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
+        // AppTab order must match the children order below.
         index: _currentTab.index,
         children: [
           HomeScreen(
             onOpenLessons: () => setState(() => _currentTab = AppTab.lessons),
             onOpenProfileTab: () => setState(() => _currentTab = AppTab.profile),
           ),
-
-          const MainSwipeFeedScreen(),
+          // AppTab.lessons
+          MainSwipeFeedScreen(isTabActive: _currentTab == AppTab.lessons),
+          // AppTab.add (center FAB)
           const AddContentScreen(),
+          // AppTab.aiBot
           const AiBotScreen(),
+          // AppTab.profile
           const ProfileScreen(),
         ],
       ),

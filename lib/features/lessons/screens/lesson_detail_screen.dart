@@ -195,7 +195,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
 
       _chewieController = ChewieController(
         videoPlayerController: _videoController!,
-        autoPlay: false,
+        autoPlay: true,
         looping: false,
         allowFullScreen: true,
         allowMuting: true,
@@ -227,7 +227,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     _ytController = YoutubePlayerController(
       initialVideoId: videoId,
       flags: const YoutubePlayerFlags(
-        autoPlay: false,
+        autoPlay: true,
         mute: false,
         enableCaption: true,
         loop: false,
@@ -312,6 +312,20 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   // ── Video area widget (Storage only) ─────────────────────────────────────
 
   Widget _videoArea() {
+    if (_ytController != null) {
+      return YoutubePlayer(
+        controller: _ytController!,
+        showVideoProgressIndicator: true,
+        progressIndicatorColor: AppColors.primaryDark,
+        progressColors: ProgressBarColors(
+          playedColor: AppColors.primaryDark,
+          handleColor: AppColors.primaryDark,
+          bufferedColor: AppColors.primaryDark.withValues(alpha: 0.3),
+          backgroundColor: Colors.white24,
+        ),
+      );
+    }
+
     if (_chewieController != null) return Chewie(controller: _chewieController!);
 
     if (_videoLoading) {

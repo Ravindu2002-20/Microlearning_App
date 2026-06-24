@@ -12,15 +12,36 @@ import '../../profile/screens/profile_screen.dart';
 import '../controllers/feed_providers.dart';
 
 class MainSwipeFeedScreen extends ConsumerStatefulWidget {
-  const MainSwipeFeedScreen({super.key});
+  final bool isTabActive;
+  const MainSwipeFeedScreen({super.key, required this.isTabActive});
 
   @override
   ConsumerState<MainSwipeFeedScreen> createState() =>
       _MainSwipeFeedScreenState();
 }
 
-class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
+class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> with WidgetsBindingObserver {
   final PageController _pageController = PageController();
+  int _activeIndex = 0;
+  bool _appIsResumed = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure the first page is aligned with the initial active index.
+    _activeIndex = 0;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Pause playback when app goes to background.
+    setState(() {
+      _appIsResumed = state == AppLifecycleState.resumed;
+    });
+  }
+
+
 
   final Map<String, bool> _liked = {};
   final Map<String, bool> _saved = {};
@@ -84,6 +105,7 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     super.dispose();
   }
@@ -307,6 +329,7 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
 
             return Scaffold(
               backgroundColor: isDark ? Colors.black : Colors.white,
+
               extendBodyBehindAppBar: true,
               appBar: null,
               body: Stack(
@@ -315,6 +338,11 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
                     controller: _pageController,
                     scrollDirection: Axis.vertical,
                     itemCount: lessons.length,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _activeIndex = index;
+                      });
+                    },
                     itemBuilder: (context, index) {
                       final lesson = lessons[index];
                       final isLiked = _liked[lesson.id] ?? false;
@@ -327,7 +355,13 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen> {
                       final initials =
                           user == null ? 'U' : _initialsFromUser(user);
 
+                      final effectiveIsActive = widget.isTabActive &&
+                          _appIsResumed &&
+                          index == _activeIndex;
+
+
                       return _FeedCard(
+                        isActive: effectiveIsActive,
                         lesson: lesson,
                         isLiked: isLiked,
                         isSaved: isSaved,
@@ -370,6 +404,8 @@ class _FeedCard extends StatefulWidget {
   final Gradient cardGradient;
   final String? avatarUrl;
   final String initials;
+  final bool isActive;
+
   final VoidCallback onLike;
   final VoidCallback onSave;
   final VoidCallback onShare;
@@ -385,6 +421,7 @@ class _FeedCard extends StatefulWidget {
     required this.cardGradient,
     required this.avatarUrl,
     required this.initials,
+    required this.isActive,
     required this.onLike,
     required this.onSave,
     required this.onShare,
@@ -405,6 +442,8 @@ class _FeedCardState extends State<_FeedCard> {
   bool _usingYoutube = false;
   String? _videoError;
 
+  bool _isPlaying = false;
+
   @override
   void initState() {
     super.initState();
@@ -418,12 +457,43 @@ class _FeedCardState extends State<_FeedCard> {
         oldWidget.lesson.videoUrl != widget.lesson.videoUrl) {
       _disposeVideo();
       _initVideo();
+      return;
+    }
+
+    if (oldWidget.isActive != widget.isActive) {
+      _syncPlaybackWithActiveState();
+    }
+  }
+
+  void _syncPlaybackWithActiveState() {
+    final shouldPlay = widget.isActive;
+    if (_isPlaying == shouldPlay) return;
+    _isPlaying = shouldPlay;
+
+    if (_usingVideo && _controller != null) {
+      if (shouldPlay) {
+        _controller!.setVolume(1.0);
+        _controller!.play();
+      } else {
+        _controller!.pause();
+        _controller!.seekTo(Duration.zero);
+      }
+    }
+
+    // YouTube player: pause/play via controller.
+    if (_usingYoutube && _youtubeController != null) {
+      if (shouldPlay) {
+        _youtubeController!.play();
+      } else {
+        _youtubeController!.pause();
+      }
     }
   }
 
   Future<void> _initVideo() async {
     final videoUrl = widget.lesson.videoUrl?.trim();
     if (videoUrl == null || videoUrl.isEmpty) return;
+
 
     try {
       _videoError = null;
@@ -434,16 +504,17 @@ class _FeedCardState extends State<_FeedCard> {
         _youtubeController = YoutubePlayerController(
           initialVideoId: videoId,
           flags: const YoutubePlayerFlags(
-            autoPlay: false,
+            autoPlay: true,
             mute: false,
             enableCaption: true,
-            loop: false,
+            loop: true,
           ),
         );
         if (mounted) {
           setState(() {
             _usingYoutube = true;
           });
+          _syncPlaybackWithActiveState();
         }
         return;
       }
@@ -462,14 +533,14 @@ class _FeedCardState extends State<_FeedCard> {
 
       await initFuture;
       controller.setLooping(true);
-      controller.setVolume(0);
+      controller.setVolume(1.0);
       if (mounted) {
         setState(() {
           _controller = controller;
           _initializeFuture = initFuture;
           _usingVideo = true;
         });
-        controller.play();
+        _syncPlaybackWithActiveState();
       }
     } catch (_) {
       _disposeVideo();
@@ -478,13 +549,18 @@ class _FeedCardState extends State<_FeedCard> {
   }
 
   void _disposeVideo() {
+    _controller?.pause();
     _controller?.dispose();
     _controller = null;
     _initializeFuture = null;
     _usingVideo = false;
+
+    _youtubeController?.pause();
     _youtubeController?.dispose();
     _youtubeController = null;
     _usingYoutube = false;
+
+    _isPlaying = false;
   }
 
   @override
@@ -498,6 +574,9 @@ class _FeedCardState extends State<_FeedCard> {
     final lesson = widget.lesson;
 
     if (_usingYoutube && _youtubeController != null) {
+      // youtube_player_flutter renders with an internal fixed aspect ratio,
+      // which can leave letterboxed bars on tall screens. Force a TikTok-style
+      // cover crop via BoxFit.cover.
       return YoutubePlayerBuilder(
         player: YoutubePlayer(
           controller: _youtubeController!,
@@ -511,12 +590,42 @@ class _FeedCardState extends State<_FeedCard> {
           ),
         ),
         builder: (context, player) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              player,
-              _buildOverlayContent(lesson),
-            ],
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              final h = constraints.maxHeight;
+              if (w == 0 || h == 0) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    player,
+                    _buildOverlayContent(lesson),
+                  ],
+                );
+              }
+
+              // YouTube embed is effectively 16:9; scale it so it covers the
+              // available area, then crop overflow.
+              final scaledHeight = (w * 9 / 16);
+              final scale = h / scaledHeight;
+              final targetWidth = w * scale;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: targetWidth,
+                      height: h,
+                      child: ClipRect(
+                        child: player,
+                      ),
+                    ),
+                  ),
+                  _buildOverlayContent(lesson),
+                ],
+              );
+            },
           );
         },
       );
@@ -530,7 +639,21 @@ class _FeedCardState extends State<_FeedCard> {
             future: _initializeFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return Container(decoration: BoxDecoration(gradient: widget.cardGradient));
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if ((lesson.thumbnailUrl ?? '').isNotEmpty)
+                      Image.network(
+                        lesson.thumbnailUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Container(decoration: BoxDecoration(gradient: widget.cardGradient)),
+                      )
+                    else
+                      Container(decoration: BoxDecoration(gradient: widget.cardGradient)),
+                    Container(color: Colors.black.withValues(alpha: 0.08)),
+                  ],
+                );
               }
               if (_controller!.value.hasError) {
                 return Stack(
@@ -607,72 +730,7 @@ class _FeedCardState extends State<_FeedCard> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Text(
-                    lesson.category,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  lesson.title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    height: 1.1,
-                    shadows: [
-                      Shadow(
-                        color: Colors.black54,
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  lesson.content.isNotEmpty ? lesson.content : lesson.description,
-                  textAlign: TextAlign.center,
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 15,
-                    height: 1.45,
-                    shadows: const [
-                      Shadow(
-                        color: Colors.black54,
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+
         Positioned(
           top: 0,
           left: 0,
@@ -801,23 +859,28 @@ class _FeedCardState extends State<_FeedCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primaryDark.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  lesson.category,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryDark.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      lesson.category,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
@@ -838,7 +901,8 @@ class _FeedCardState extends State<_FeedCard> {
               ),
               const SizedBox(height: 4),
               Text(
-                lesson.description,
+                (lesson.content.isNotEmpty ? lesson.content : lesson.description)
+                    .trim(),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 13,
@@ -849,7 +913,7 @@ class _FeedCardState extends State<_FeedCard> {
                     ),
                   ],
                 ),
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ],

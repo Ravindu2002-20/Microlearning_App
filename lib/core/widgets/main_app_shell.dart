@@ -26,7 +26,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         index: _currentTab.index,
         children: [
           HomeScreen(onOpenLessons: () => setState(() => _currentTab = AppTab.lessons)),
-          const MainSwipeFeedScreen(),
+          MainSwipeFeedScreen(isTabActive: _currentTab == AppTab.lessons),
           const AddContentScreen(),
           const AiBotScreen(),
           const ProfileScreen(),

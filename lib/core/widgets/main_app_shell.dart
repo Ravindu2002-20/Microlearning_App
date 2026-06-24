@@ -25,8 +25,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       body: IndexedStack(
         index: _currentTab.index,
         children: [
-          HomeScreen(onOpenLessons: () => setState(() => _currentTab = AppTab.lessons)),
-          MainSwipeFeedScreen(isTabActive: _currentTab == AppTab.lessons),
+          HomeScreen(
+            onOpenLessons: () => setState(() => _currentTab = AppTab.lessons),
+            onOpenProfileTab: () => setState(() => _currentTab = AppTab.profile),
+          ),
+
+          const MainSwipeFeedScreen(),
           const AddContentScreen(),
           const AiBotScreen(),
           const ProfileScreen(),

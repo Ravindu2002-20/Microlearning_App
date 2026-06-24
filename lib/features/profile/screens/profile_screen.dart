@@ -12,6 +12,8 @@ import '../../learning/repositories/learning_repository.dart';
 
 import '../../admin/screens/admin_review_screen.dart';
 import '../../../core/services/admin_service.dart';
+import 'edit_profile_screen.dart';
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,34 +57,9 @@ class LeaderboardEntry {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mock Data
+// DB-backed data (no mock values)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Recently watched content categories (derived from user_progress + lessons.category)
-// TODO(blackboxai): wire up to Supabase. For now keep an empty state until implemented.
-final _recentWatchedCategories = <String>{};
-
-final _leaderboard = [
-  const LeaderboardEntry(rank: 1, name: 'Sarah Chen', handle: '@sarahai', xp: 4850, trendingUp: true),
-  const LeaderboardEntry(rank: 2, name: 'Alex Kim', handle: '@alexk', xp: 4320, trendingUp: true),
-  const LeaderboardEntry(rank: 3, name: 'Maria Lopez', handle: '@marial', xp: 3980, trendingUp: false),
-  const LeaderboardEntry(rank: 4, name: 'James Wilson', handle: '@jwilson', xp: 3650, trendingUp: true),
-  const LeaderboardEntry(rank: 5, name: 'Priya Patel', handle: '@priyap', xp: 3420, trendingUp: false),
-  const LeaderboardEntry(rank: 6, name: 'David Kim', handle: '@davidk', xp: 3100, trendingUp: true),
-  const LeaderboardEntry(rank: 7, name: 'Emma Thompson', handle: '@emmat', xp: 2890, trendingUp: false),
-  const LeaderboardEntry(rank: 8, name: 'Lucas Brown', handle: '@lucasb', xp: 2650, trendingUp: true),
-  const LeaderboardEntry(rank: 9, name: 'Sophia Lee', handle: '@sophial', xp: 2410, trendingUp: false),
-  const LeaderboardEntry(rank: 10, name: 'Oliver Davis', handle: '@oliverd', xp: 2180, trendingUp: true),
-];
-
-const _currentUserEntry = LeaderboardEntry(
-  rank: 34,
-  name: 'Ravindu Induwara',
-  handle: '@ravindu',
-  xp: 2350,
-  isCurrentUser: true,
-  trendingUp: true,
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ProfileScreen
@@ -215,36 +192,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onAction: () {},
             ),
             const SizedBox(height: AppDimensions.spacingMd),
-            ...(_recentWatchedCategories.isEmpty)
-                ? [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
-                      child: Container(
-                        padding: const EdgeInsets.all(AppDimensions.spacingLg),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceDark,
-                          borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
-                          border: Border.all(
-                            color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
-                          ),
-                        ),
-                        child: Text(
-                          'No recently watched categories yet.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textSecondaryDark,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ]
-                : _recentWatchedCategories
-                    .take(6)
-                    .map((c) => Padding(
-                          padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
-                          child: _CategoryChipCard(category: c),
-                        )),
+            _MyLearningCategoriesSection(),
+
             const SizedBox(height: AppDimensions.spacingXxl),
 
             // ── Leaderboard Section ──
@@ -253,6 +202,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onToggle: () => setState(() => _showWeekly = !_showWeekly),
             ),
             const SizedBox(height: AppDimensions.spacingXxl),
+
           ],
         ),
       ),
@@ -267,200 +217,340 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 // ── Profile Header (Avatar + Name + Bio) ──────────────────────────────────
 
 class _ProfileHeader extends StatelessWidget {
+  const _ProfileHeader();
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Avatar with level ring
-        Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const SweepGradient(
-              colors: [
-                AppColors.primaryDark,
-                AppColors.secondaryDark,
-                AppColors.accentQuiz,
-                AppColors.warning,
-                AppColors.primaryDark,
-              ],
-              stops: [0.0, 0.3, 0.6, 0.85, 1.0],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryDark.withValues(alpha: 0.3),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(4),
-          child: Container(
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.backgroundDark,
-            ),
-            padding: const EdgeInsets.all(3),
-            child: Container(
+    final user = Supabase.instance.client.auth.currentUser;
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: user == null
+          ? Future.value(null)
+          : LearningRepository(Supabase.instance.client)
+              .fetchUserProfile(userUuid: user.id),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final fullName = (profile?['full_name'] as String?)?.trim();
+        final username = (profile?['username'] as String?)?.trim();
+        final avatarUrl = (profile?['avatar_url'] as String?)?.trim();
+
+        final displayName =
+            (fullName != null && fullName.isNotEmpty) ? fullName : null;
+        final handle = username != null && username.isNotEmpty
+            ? (username.startsWith('@') ? username : '@$username')
+            : null;
+
+        final initials = _initialsFor(displayName ?? user?.email ?? 'U');
+
+        final hasAnyHeaderData =
+            displayName != null || handle != null || (avatarUrl != null && avatarUrl.isNotEmpty);
+
+        return Column(
+          children: [
+            // Avatar with level ring
+            Container(
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF7B61FF), Color(0xFF00E5FF)],
+                gradient: const SweepGradient(
+                  colors: [
+                    AppColors.primaryDark,
+                    AppColors.secondaryDark,
+                    AppColors.accentQuiz,
+                    AppColors.warning,
+                    AppColors.primaryDark,
+                  ],
+                  stops: [0.0, 0.3, 0.6, 0.85, 1.0],
                 ),
-              ),
-              child: const Center(
-                child: Text(
-                  'RI',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryDark.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    spreadRadius: 2,
                   ),
+                ],
+              ),
+              padding: const EdgeInsets.all(4),
+              child: Container(
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.backgroundDark,
+                ),
+                padding: const EdgeInsets.all(3),
+                child: ClipOval(
+                  child: avatarUrl != null && avatarUrl.isNotEmpty
+                      ? Image.network(
+                          avatarUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _InitialAvatar(initials: initials),
+                        )
+                      : _InitialAvatar(initials: initials),
                 ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: AppDimensions.spacingMd),
+            const SizedBox(height: AppDimensions.spacingMd),
 
-        // Name + Username
-        const Text(
-          'Ravindu Induwara',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimaryDark,
-            letterSpacing: -0.3,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.accentQuiz,
+            // Name + Username
+            Text(
+              displayName ?? 'No records',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimaryDark,
+                letterSpacing: -0.3,
               ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(width: 6),
-            const Text(
-              '@ravindu',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondaryDark,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppDimensions.spacingSm),
-
-        // Bio
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.spacingLg,
-            vertical: AppDimensions.spacingSm,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-            border: Border.all(
-              color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
-            ),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.auto_awesome_rounded,
-                size: 14,
-                color: AppColors.accentAiSecondary,
-              ),
-              SizedBox(width: 6),
-              Text(
-                'Learning AI one lesson at a time.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondaryDark,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Stats Row ─────────────────────────────────────────────────────────────
-
-class _StatsRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final stats = [
-      _StatData(Icons.menu_book_rounded, '245', 'Lessons'),
-      _StatData(Icons.auto_awesome_rounded, '2,350', 'XP'),
-      _StatData(Icons.local_fire_department_rounded, '7', 'Streak'),
-      _StatData(Icons.emoji_events_rounded, '#34', 'Rank'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.spacingLg),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
-        border: Border.all(
-          color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Row(
-        children: stats.map((stat) {
-          return Expanded(
-            child: Column(
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: _statColor(stat.label).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
-                  ),
-                  child: Icon(
-                    stat.icon,
-                    color: _statColor(stat.label),
-                    size: 20,
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.accentQuiz,
                   ),
                 ),
-                const SizedBox(height: AppDimensions.spacingXs),
+                const SizedBox(width: 6),
                 Text(
-                  stat.value,
+                  handle ?? '@user',
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimaryDark,
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  stat.label,
-                  style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textSecondaryDark,
                   ),
                 ),
               ],
             ),
-          );
-        }).toList(),
+            const SizedBox(height: AppDimensions.spacingSm),
+
+            // Bio (only show if some profile row exists)
+            if (hasAnyHeaderData)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingLg,
+                  vertical: AppDimensions.spacingSm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                  border: Border.all(
+                    color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 14,
+                      color: AppColors.accentAiSecondary,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Learning AI one lesson at a time.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondaryDark,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingLg,
+                  vertical: AppDimensions.spacingSm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceDark,
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
+                  border: Border.all(
+                    color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                  ),
+                ),
+                child: const Text(
+                  'no records',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondaryDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _initialsFor(String value) {
+    final parts = value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'U';
+    if (parts.length == 1) {
+      return parts.first.substring(0, 1).toUpperCase();
+    }
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+}
+
+class _InitialAvatar extends StatelessWidget {
+  final String initials;
+  const _InitialAvatar({required this.initials});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.backgroundDark,
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 28,
+          fontWeight: FontWeight.w800,
+        ),
       ),
+    );
+  }
+}
+
+
+// ── Stats Row ─────────────────────────────────────────────────────────────
+
+class _StatsRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return Container(
+        padding: const EdgeInsets.all(AppDimensions.spacingLg),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark,
+          borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+          border: Border.all(
+            color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+          ),
+        ),
+        child: const Center(
+          child: Text(
+            'no records',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondaryDark,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: LearningRepository(Supabase.instance.client)
+          .fetchUserStatsFromProgress(userUuid: user.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            padding: const EdgeInsets.all(AppDimensions.spacingLg),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceDark,
+              borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+              border: Border.all(
+                color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+              ),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        final data = snapshot.data!;
+        final lessonsCount = (data['lessonsCount'] as int?) ?? 0;
+        final totalXp = (data['totalXp'] as int?) ?? 0;
+        final streak = (data['streak'] as int?) ?? 0;
+        final rank = (data['rank'] as int?) ?? 0;
+
+        final stats = [
+          _StatData(Icons.menu_book_rounded, '${lessonsCount}', 'Lessons'),
+          _StatData(
+            Icons.auto_awesome_rounded,
+            totalXp.toString(),
+            'XP',
+          ),
+          _StatData(
+            Icons.local_fire_department_rounded,
+            '${streak}',
+            'Streak',
+          ),
+          _StatData(Icons.emoji_events_rounded, '#${rank}', 'Rank'),
+        ];
+
+        return Container(
+          padding: const EdgeInsets.all(AppDimensions.spacingLg),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceDark,
+            borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+            border: Border.all(
+              color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+            ),
+          ),
+          child: Row(
+            children: stats.map((stat) {
+              return Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: _statColor(stat.label).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
+                      ),
+                      child: Icon(
+                        stat.icon,
+                        color: _statColor(stat.label),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingXs),
+                    Text(
+                      stat.value,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimaryDark,
+                        height: 1.1,
+                      ),
+                    ),
+                    Text(
+                      stat.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 
@@ -486,6 +576,48 @@ class _StatData {
   final String label;
   const _StatData(this.icon, this.value, this.label);
 }
+
+class _MyLearningCategoriesSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return const _NoRecordsCard(message: 'no records');
+    }
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: LearningRepository(Supabase.instance.client)
+          .fetchUserRecentCategoriesFromProgress(userUuid: user.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            height: 40,
+            child: Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+
+        }
+
+        final cats = snapshot.data!;
+        if (cats.isEmpty) {
+          return const _NoRecordsCard(message: 'no records');
+        }
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: cats.map((c) {
+            final name = (c['name'] as String?)?.trim();
+            if (name == null || name.isEmpty) return const SizedBox.shrink();
+            return _CategoryChipCard(category: name);
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
 
 // ── Section Header ────────────────────────────────────────────────────────
 
@@ -648,20 +780,52 @@ class _LeaderboardSection extends StatelessWidget {
         ),
         const SizedBox(height: AppDimensions.spacingLg),
 
-        // Top 10
-        ...List.generate(_leaderboard.length, (index) {
-          final entry = _leaderboard[index];
-          return _LeaderboardRow(
-            entry: entry,
-            isTop3: index < 3,
-          );
-        }),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: LearningRepository(Supabase.instance.client)
+              .fetchLeaderboardFromProgress(weekly: showWeekly, limit: 10),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              );
+            }
 
-        // Current user pin (if not in top 10)
-        const SizedBox(height: AppDimensions.spacingMd),
-        _DividerWithDot(),
-        const SizedBox(height: AppDimensions.spacingMd),
-        _LeaderboardRow(entry: _currentUserEntry, isTop3: false),
+            final rows = snapshot.data!;
+            if (rows.isEmpty) {
+              return const _NoRecordsCard(message: 'no records');
+            }
+
+            final user = Supabase.instance.client.auth.currentUser;
+
+            return Column(
+              children: rows.map((r) {
+                final rank = (r['rank'] as num?)?.toInt() ?? 0;
+            final name = r['name']?.toString() ?? '';
+                final handle = (r['handle'] as String?)?.toString() ?? '@user';
+                final xp = (r['xp'] as num?)?.toInt() ?? 0;
+                final uid = (r['user_id'] as String?)?.toString();
+
+                final isCurrentUser = user != null && uid != null && uid == user.id;
+
+                return _LeaderboardRow(
+                  entry: LeaderboardEntry(
+                    rank: rank,
+                    name: name,
+                    handle: handle,
+                    xp: xp,
+                    isCurrentUser: isCurrentUser,
+                    trendingUp: true,
+                  ),
+                  isTop3: rank <= 3,
+                );
+              }).toList(),
+            );
+          },
+        ),
+
+
+
       ],
     );
   }
@@ -739,6 +903,34 @@ class _DividerWithDot extends StatelessWidget {
     );
   }
 }
+
+class _NoRecordsCard extends StatelessWidget {
+  final String message;
+  const _NoRecordsCard({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppDimensions.spacingLg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceDark,
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        border: Border.all(
+          color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
+        ),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondaryDark,
+        ),
+      ),
+    );
+  }
+}
+
 
 // ── Leaderboard Row ───────────────────────────────────────────────────────
 
@@ -907,7 +1099,6 @@ class _SettingsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = [
       _SettingItem(Icons.person_outline, 'Edit Profile'),
-      _SettingItem(Icons.palette_outlined, 'Appearance'),
       _SettingItem(Icons.notifications_outlined, 'Notifications'),
       _SettingItem(Icons.lock_outline, 'Privacy'),
       _SettingItem(Icons.tune_outlined, 'Learning Preferences'),
@@ -1264,7 +1455,19 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => Navigator.of(context).pop(),
+      onTap: () async {
+        // Close the sheet first.
+        Navigator.of(context).pop();
+
+        if (item.label == 'Edit Profile') {
+          if (!context.mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const EditProfileScreen(),
+            ),
+          );
+        }
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppDimensions.spacingXxl,
@@ -1307,3 +1510,4 @@ class _SettingsTile extends StatelessWidget {
     );
   }
 }
+

@@ -217,9 +217,240 @@ class LearningRepository {
     }
   }
 
+  /// Computes user stats from `user_progress`.
+  /// - lessonsCount: number of completed lessons
+  /// - totalXp: sum of `score` for completed lessons
+  /// - streak: consecutive-day streak based on completion days
+  /// - rank: rank by totalXp among all users (desc)
+  Future<Map<String, dynamic>> fetchUserStatsFromProgress({
+    required String userUuid,
+  }) async {
+    try {
+      final completedRows = await _supabase
+          .from('user_progress')
+          .select('score,last_accessed,is_completed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true);
+
+      final completed = (completedRows as List<dynamic>)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
+
+      final lessonsCount = completed.length;
+      final totalXp = completed.fold<int>(0, (sum, row) {
+        final score = row['score'];
+        if (score == null) return sum;
+        return sum + (score as num).toInt();
+      });
+
+      // streak: consecutive days with at least one completion (based on last_accessed day)
+      final completedDates = completed
+          .map((row) {
+            final raw = row['last_accessed'];
+            if (raw == null) return null;
+            final parsed = DateTime.tryParse(raw.toString());
+            if (parsed == null) return null;
+            return DateTime(parsed.year, parsed.month, parsed.day);
+          })
+          .whereType<DateTime>()
+          .toSet()
+          .toList();
+
+      completedDates.sort((a, b) => b.compareTo(a));
+
+      int streak = 0;
+      if (completedDates.isNotEmpty) {
+        final latest = completedDates.first;
+        var cursor = latest;
+        while (completedDates.any((d) => d.isAtSameMomentAs(cursor))) {
+          streak++;
+          cursor = cursor.subtract(const Duration(days: 1));
+        }
+      }
+
+      // rank: sum of xp per user (completed only)
+      final allCompleted = await _supabase
+          .from('user_progress')
+          .select('user_id,score')
+          .eq('is_completed', true);
+
+      final xpByUser = <String, int>{};
+      for (final rowAny in (allCompleted as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final uid = row['user_id']?.toString();
+        if (uid == null) continue;
+        final score = row['score'];
+        final sc = score == null ? 0 : (score as num).toInt();
+        xpByUser[uid] = (xpByUser[uid] ?? 0) + sc;
+      }
+
+      final sorted = xpByUser.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      final idx = sorted.indexWhere((e) => e.key == userUuid);
+      final rank = idx >= 0 ? idx + 1 : sorted.length + 1;
+
+      return {
+        'lessonsCount': lessonsCount,
+        'totalXp': totalXp,
+        'streak': streak,
+        'rank': rank,
+      };
+    } catch (e, st) {
+      debugPrint('fetchUserStatsFromProgress error: $e\n$st');
+      return {
+        'lessonsCount': 0,
+        'totalXp': 0,
+        'streak': 0,
+        'rank': 0,
+      };
+    }
+  }
+
+  /// Returns category names the user watched recently.
+  /// Uses completed `user_progress` ordered by `last_accessed`, then maps
+  /// `lesson_id -> lessons.category`.
+  Future<List<Map<String, dynamic>>> fetchUserRecentCategoriesFromProgress({
+    required String userUuid,
+    int limit = 6,
+  }) async {
+    try {
+      final progress = await _supabase
+          .from('user_progress')
+          .select('lesson_id,last_accessed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true)
+          .order('last_accessed', ascending: false)
+          .limit(120);
+
+      final progressList = progress as List<dynamic>;
+
+      final lessonIds = progressList
+          .map((e) => (e as Map<String, dynamic>)['lesson_id']?.toString())
+          .whereType<String>()
+          .toSet()
+          .toList();
+
+      if (lessonIds.isEmpty) return [];
+
+      final lessons = await _supabase
+          .from('lessons')
+          .select('id,category')
+          .inFilter('id', lessonIds);
+
+      final lessonById = <String, String>{};
+      for (final rowAny in (lessons as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final id = row['id']?.toString();
+        final cat = row['category']?.toString();
+        if (id == null || cat == null) continue;
+        lessonById[id] = cat;
+      }
+
+      final categories = <String, Map<String, dynamic>>{};
+      for (final rowAny in progressList) {
+        final row = rowAny as Map<String, dynamic>;
+        final lid = row['lesson_id']?.toString();
+        if (lid == null) continue;
+        final cat = lessonById[lid];
+        if (cat == null || cat.isEmpty) continue;
+        if (!categories.containsKey(cat)) {
+          categories[cat] = {'name': cat};
+        }
+        if (categories.length >= limit) break;
+      }
+
+      return categories.values.toList();
+    } catch (e, st) {
+      debugPrint('fetchUserRecentCategoriesFromProgress error: $e\n$st');
+      return [];
+    }
+  }
+
+  /// Leaderboard based on total XP from `user_progress.score` (completed only).
+  /// - weekly=true: only last 7 days from last_accessed
+  Future<List<Map<String, dynamic>>> fetchLeaderboardFromProgress({
+    required bool weekly,
+    int limit = 10,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final start = now.subtract(const Duration(days: 7));
+
+      var query = _supabase
+          .from('user_progress')
+          .select('user_id,score')
+          .eq('is_completed', true);
+
+      if (weekly) {
+        query = query.gte('last_accessed', start.toIso8601String());
+      }
+
+      final rows = await query;
+
+      final xpByUser = <String, int>{};
+      for (final rowAny in (rows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final uid = row['user_id']?.toString();
+        if (uid == null) continue;
+        final score = row['score'];
+        final sc = score == null ? 0 : (score as num).toInt();
+        xpByUser[uid] = (xpByUser[uid] ?? 0) + sc;
+      }
+
+      if (xpByUser.isEmpty) return [];
+
+      final sorted = xpByUser.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      final top = sorted.take(limit).toList();
+      final ids = top.map((e) => e.key).toList();
+
+      final profileRows = await _supabase
+          .from('profiles')
+          .select('id,full_name,username')
+          .inFilter('id', ids);
+
+      final profileById = <String, Map<String, dynamic>>{};
+      for (final rowAny in (profileRows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final id = row['id']?.toString();
+        if (id == null) continue;
+        profileById[id] = row;
+      }
+
+      return List.generate(top.length, (i) {
+        final uid = top[i].key;
+        final xp = top[i].value;
+        final pr = profileById[uid];
+
+        final fullName = (pr?['full_name'] as String?)?.trim();
+        final username = (pr?['username'] as String?)?.trim();
+
+        return {
+          'rank': i + 1,
+          'user_id': uid,
+          'name': (fullName != null && fullName.isNotEmpty)
+              ? fullName
+              : (username ?? uid),
+          'handle': (username != null && username.isNotEmpty)
+              ? (username.startsWith('@') ? username : '@$username')
+              : '@user',
+          'xp': xp,
+          'isCurrentUser': false,
+          'trendingUp': true,
+        };
+      });
+    } catch (e, st) {
+      debugPrint('fetchLeaderboardFromProgress error: $e\n$st');
+      return [];
+    }
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
 
   Future<List<LessonModel>> _fetchFromSupabase({
+
     required String userUuid,
     required UserContextState ambientContext,
   }) async {

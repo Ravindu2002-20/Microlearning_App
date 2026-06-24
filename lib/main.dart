@@ -74,128 +74,170 @@ class _AppRouter extends ConsumerStatefulWidget {
 }
 
 class _AppRouterState extends ConsumerState<_AppRouter> {
-  @override
-  void initState() {
-    super.initState();
+  bool _initialNavigationDone = false;
 
-    // Only one navigation source of truth: listen to auth state.
-    // Keep splash visible briefly, but don't route until auth stream has data.
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      // Trigger rebuild so Riverpod listener can start producing events.
-      if (mounted) setState(() {});
-    });
-  }
+  Future<void> _navigateToAppropriateScreen({required User? user}) async {
+    if (!mounted) return;
 
+    if (user == null) {
+      // No session: onboarding once, then login.
+      final completedOnboarding = ref.read(hasCompletedOnboardingProvider);
+      if (!completedOnboarding) {
+        Navigator.of(context).pushReplacement(_fadeRoute(const OnboardingScreen()));
+        return;
+      }
 
+      Navigator.of(context).pushReplacement(
+        _fadeRoute(const LoginRegistrationScreen()),
+      );
+      return;
+    }
 
-  PageRouteBuilder _fadeRoute(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondary) => page,
-      transitionsBuilder: (context, animation, secondary, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 500),
+    // Session exists
+    final prefsRepo = ref.read(userPreferencesRepositoryProvider);
+    final hasUserDetails = await prefsRepo.isOnboardingComplete(user.id);
+
+    if (!mounted) return;
+
+    if (!hasUserDetails) {
+      Navigator.of(context).pushReplacement(
+        _fadeRoute(const UserDetailsOnboardingScreen()),
+      );
+      return;
+    }
+
+    final isAdmin = await ref.read(isAdminProvider.future);
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(sessionUserProvider, (previous, next) async {
-      // Only navigation source of truth.
-      // The router is driven by the auth stream events.
+    final authAsync = ref.watch(sessionUserProvider);
+
+    // Always listen for logout after initial navigation happened.
+    ref.listen(sessionUserProvider, (previous, next) {
       if (!mounted) return;
 
-      // Re-route on logout -> auth
       final prevUser = previous?.valueOrNull;
       final nextUser = next.valueOrNull;
 
-      // (If needed, previous/next can be null during loading.)
+      if (!_initialNavigationDone) return;
 
-
-
-
+      // Logout flow
       if (prevUser != null && nextUser == null) {
         Navigator.of(context).pushAndRemoveUntil(
           _fadeRoute(const LoginRegistrationScreen()),
           (_) => false,
         );
-        return;
       }
-
-      // Re-route on login (null -> user) so admin vs user dashboard swaps
-      if (prevUser == null && nextUser != null) {
-        final completedOnboarding = ref.read(hasCompletedOnboardingProvider);
-        if (!completedOnboarding) {
-          if (!mounted) return;
-          // ignore: use_build_context_synchronously
-          Navigator.of(context).pushReplacement(
-            _fadeRoute(const OnboardingScreen()),
-          );
-          return;
-        }
-
-        final prefsRepo = ref.read(userPreferencesRepositoryProvider);
-        final hasUserDetails = await prefsRepo.isOnboardingComplete(nextUser.id);
-
-        if (!mounted) return;
-        if (!hasUserDetails) {
-          if (!mounted) return;
-          // ignore: use_build_context_synchronously
-          Navigator.of(context).pushReplacement(
-            _fadeRoute(const UserDetailsOnboardingScreen()),
-          );
-          return;
-        }
-
-        // Check admin before routing
-        final isAdmin = await ref.read(isAdminProvider.future);
-
-        if (!mounted) return;
-        // ignore: use_build_context_synchronously
-        Navigator.of(context).pushReplacement(
-          _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()),
-        );
-      }
-
-
-
     });
 
-    // Branded splash screen
-    return const Scaffold(
-      backgroundColor: AppColors.backgroundDark,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Logo with glow
-            _SplashLogo(),
-            SizedBox(height: AppDimensions.spacingLg),
-            Text(
-              'MicroLearn',
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimaryDark,
-                letterSpacing: -0.5,
-              ),
+    // Perform initial navigation exactly once, when auth stream resolves.
+    return authAsync.when(
+      loading: () {
+        return const Scaffold(
+          backgroundColor: AppColors.backgroundDark,
+          body: Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 3),
             ),
-            SizedBox(height: AppDimensions.spacingXs),
-            Text(
-              'Learn smarter, anywhere',
-              style: TextStyle(
-                fontSize: 15,
-                color: AppColors.textSecondaryDark,
-                fontWeight: FontWeight.w500,
-              ),
+          ),
+        );
+      },
+      error: (err, st) {
+        return Scaffold(
+          backgroundColor: AppColors.backgroundDark,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 40),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'Auth error. Please restart the app.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textPrimaryDark, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: AppDimensions.spacingXxl + 8),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
+      data: (user) {
+        if (!_initialNavigationDone) {
+          _initialNavigationDone = true;
+          // Run navigation after current frame so Navigator has a context.
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            try {
+              await _navigateToAppropriateScreen(user: user);
+            } catch (_) {
+              if (!mounted) return;
+              // Fail safe: go to login.
+              Navigator.of(context).pushAndRemoveUntil(
+                _fadeRoute(const LoginRegistrationScreen()),
+                (_) => false,
+              );
+            }
+          });
+        }
+
+        return const Scaffold(
+          backgroundColor: AppColors.backgroundDark,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _SplashLogo(),
+                SizedBox(height: AppDimensions.spacingLg),
+                Text(
+                  'MicroLearn',
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimaryDark,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                SizedBox(height: AppDimensions.spacingXs),
+                Text(
+                  'Learn smarter, anywhere',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textSecondaryDark,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: AppDimensions.spacingXxl + 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  PageRouteBuilder _fadeRoute(Widget page) {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, _) => page,
+      transitionsBuilder: (context, animation, _, child) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      transitionDuration: const Duration(milliseconds: 500),
     );
   }
 }
+
+
+
 
 class _SplashLogo extends StatefulWidget {
   const _SplashLogo({super.key});

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/lesson_model.dart';
+import '../models/lesson_comment_model.dart';
 import '../models/video_model.dart';
 import '../../../core/services/context_engine_service.dart';
 
@@ -201,36 +202,7 @@ class LearningRepository {
     }
   }
 
-  Future<bool> toggleLike(String lessonId) async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return false;
-    try {
-      final existing = await _supabase
-          .from('lesson_likes')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('lesson_id', lessonId)
-          .maybeSingle();
-      if (existing != null) {
-        await _supabase
-            .from('lesson_likes')
-            .delete()
-            .eq('user_id', user.id)
-            .eq('lesson_id', lessonId);
-        return false;
-      }
-      await _supabase.from('lesson_likes').insert({
-        'user_id': user.id,
-        'lesson_id': lessonId,
-      });
-      return true;
-    } catch (e) {
-      debugPrint('toggleLike error: $e');
-      return false;
-    }
-  }
-
-  Future<bool> isLikedByMe(String lessonId) async {
+  Future<bool> isLikedByMe({required String lessonId}) async {
     final user = _supabase.auth.currentUser;
     if (user == null) return false;
     try {
@@ -246,28 +218,46 @@ class LearningRepository {
     }
   }
 
-  Future<int> getLikeCount(String lessonId) async {
+  Future<int> getLikeCount({required String lessonId}) async {
     try {
-      final rows = await _supabase
-          .from('lesson_likes')
-          .select('id')
-          .eq('lesson_id', lessonId);
-      return (rows as List).length;
+      final result = await _supabase.rpc('get_lesson_like_count', params: {
+        'p_lesson_id': lessonId,
+      });
+      return (result as num?)?.toInt() ?? 0;
     } catch (e) {
       return 0;
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchComments(String lessonId) async {
+  Future<Map<String, int>> getLikeCountsForLessons(List<String> lessonIds) async {
+    if (lessonIds.isEmpty) return {};
     try {
-      final rows = await _supabase
-          .from('lesson_comments')
-          .select('id,user_id,content,created_at')
-          .eq('lesson_id', lessonId)
-          .order('created_at', ascending: true);
-      return (rows as List<dynamic>).cast<Map<String, dynamic>>();
+      final rows = await _supabase.rpc('get_lesson_like_counts', params: {
+        'p_lesson_ids': lessonIds,
+      });
+      final result = <String, int>{};
+      for (final row in (rows as List<dynamic>)) {
+        final map = row as Map<String, dynamic>;
+        final id = map['lesson_id']?.toString();
+        if (id == null) continue;
+        result[id] = (map['like_count'] as num?)?.toInt() ?? 0;
+      }
+      return result;
     } catch (e) {
-      return [];
+      return {};
+    }
+  }
+
+  Future<Set<String>> getMyLikedLessonIds(List<String> lessonIds) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null || lessonIds.isEmpty) return <String>{};
+    try {
+      final rows = await _supabase.rpc('get_my_liked_lesson_ids', params: {
+        'p_lesson_ids': lessonIds,
+      });
+      return (rows as List<dynamic>).map((e) => e.toString()).toSet();
+    } catch (e) {
+      return <String>{};
     }
   }
 
@@ -297,18 +287,113 @@ class LearningRepository {
     }
   }
 
-  Future<bool> addComment(String lessonId, String text) async {
+  Future<bool> toggleLike({required String lessonId}) async {
     final user = _supabase.auth.currentUser;
-    if (user == null) return false;
+    if (user == null) {
+      throw Exception('Must be signed in to like');
+    }
     try {
-      await _supabase.from('lesson_comments').insert({
+      final liked = await isLikedByMe(lessonId: lessonId);
+      if (liked) {
+        await _supabase
+            .from('lesson_likes')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('lesson_id', lessonId);
+        return false;
+      }
+      await _supabase.from('lesson_likes').insert({
         'user_id': user.id,
         'lesson_id': lessonId,
-        'content': text,
       });
       return true;
     } catch (e) {
-      debugPrint('addComment error: $e');
+      final message = e.toString().toLowerCase();
+      if (message.contains('duplicate') || message.contains('unique')) {
+        return true;
+      }
+      rethrow;
+    }
+  }
+
+  Future<int> getCommentCount({required String lessonId}) async {
+    final counts = await getCommentCountsForLessons([lessonId]);
+    return counts[lessonId] ?? 0;
+  }
+
+  Future<Map<String, int>> getCommentCountsForLessons(List<String> lessonIds) async {
+    if (lessonIds.isEmpty) return {};
+    try {
+      final rows = await _supabase.rpc('get_lesson_comment_counts', params: {
+        'p_lesson_ids': lessonIds,
+      });
+      final result = <String, int>{};
+      for (final row in (rows as List<dynamic>)) {
+        final map = row as Map<String, dynamic>;
+        final id = map['lesson_id']?.toString();
+        if (id == null) continue;
+        result[id] = (map['comment_count'] as num?)?.toInt() ?? 0;
+      }
+      return result;
+    } catch (e) {
+      return {};
+    }
+  }
+
+  Future<List<LessonCommentModel>> fetchComments({
+    required String lessonId,
+    int limit = 50,
+  }) async {
+    try {
+      final rows = await _supabase
+          .from('lesson_comments')
+          .select(
+            'id, user_id, lesson_id, content, created_at, updated_at, profiles(full_name, username, avatar_url)',
+          )
+          .eq('lesson_id', lessonId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return (rows as List<dynamic>)
+          .map((e) => LessonCommentModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<LessonCommentModel?> addComment({
+    required String lessonId,
+    required String content,
+  }) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('Must be signed in to comment');
+    }
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final inserted = await _supabase
+          .from('lesson_comments')
+          .insert({
+            'user_id': user.id,
+            'lesson_id': lessonId,
+            'content': trimmed,
+          })
+          .select(
+            'id, user_id, lesson_id, content, created_at, updated_at, profiles(full_name, username, avatar_url)',
+          )
+          .single();
+      return LessonCommentModel.fromJson(Map<String, dynamic>.from(inserted as Map));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<bool> deleteComment({required String commentId}) async {
+    try {
+      await _supabase.from('lesson_comments').delete().eq('id', commentId);
+      return true;
+    } catch (e) {
       return false;
     }
   }

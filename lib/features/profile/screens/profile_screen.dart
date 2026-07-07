@@ -7,7 +7,10 @@ import '../../../core/constants/constants.dart';
 import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
 import '../../auth/screens/onboarding_screen.dart';
+import '../../learning/models/lesson_model.dart';
 import '../../learning/repositories/learning_repository.dart';
+import '../../learning/services/saved_videos_service.dart';
+import '../../lessons/screens/lesson_detail_screen.dart';
 
 
 import '../../admin/screens/admin_review_screen.dart';
@@ -184,14 +187,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _StatsRow(),
             const SizedBox(height: AppDimensions.spacingXxl),
 
+            _SavedVideosSection(),
+            const SizedBox(height: AppDimensions.spacingXxl),
+
             // ── Learning Progress Section ──
             _SectionHeader(
               title: 'My Learning',
               action: 'View All',
-              onAction: () {},
+              onAction: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => _MyLearningRecordsPage(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: AppDimensions.spacingMd),
-            _MyLearningCategoriesSection(),
+            _MyLearningRecordsSection(),
 
             const SizedBox(height: AppDimensions.spacingXxl),
 
@@ -579,7 +591,7 @@ class _StatData {
   const _StatData(this.icon, this.value, this.label);
 }
 
-class _MyLearningCategoriesSection extends StatelessWidget {
+class _MyLearningRecordsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
@@ -589,7 +601,7 @@ class _MyLearningCategoriesSection extends StatelessWidget {
 
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: LearningRepository(Supabase.instance.client)
-          .fetchUserRecentCategoriesFromProgress(userUuid: user.id),
+          .fetchUserRecentLearningRecords(userUuid: user.id, limit: 3),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const SizedBox(
@@ -601,19 +613,216 @@ class _MyLearningCategoriesSection extends StatelessWidget {
 
         }
 
-        final cats = snapshot.data!;
-        if (cats.isEmpty) {
-          return const _NoRecordsCard(message: 'no records');
+        final records = snapshot.data!;
+        if (records.isEmpty) {
+          return const _NoRecordsCard(message: 'no learning records');
         }
 
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: cats.map((c) {
-            final name = (c['name'] as String?)?.trim();
-            if (name == null || name.isEmpty) return const SizedBox.shrink();
-            return _CategoryChipCard(category: name);
+        return Column(
+          children: records.map((record) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _LearningRecordCard(record: record),
+            );
           }).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _LearningRecordCard extends StatelessWidget {
+  final Map<String, dynamic> record;
+  const _LearningRecordCard({required this.record});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final title = record['title']?.toString() ?? 'Untitled';
+    final category = record['category']?.toString() ?? 'General';
+    final thumbnail = _thumbnailForRecord(record);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceFor(brightness),
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        border: Border.all(
+          color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        onTap: () {
+          final videoUrl = record['video_url']?.toString() ?? '';
+          final lesson = LessonModel(
+            id: record['lesson_id']?.toString() ?? '',
+            title: title,
+            description: '',
+            content: '',
+            category: category,
+            videoUrl: videoUrl.isNotEmpty ? videoUrl : null,
+            thumbnailUrl: thumbnail.isNotEmpty ? thumbnail : null,
+            difficultyLevel: 'beginner',
+            format: 'video',
+            minNetworkStrength: 'weak',
+            safeForMotion: true,
+            status: 'approved',
+            isPublished: true,
+            createdAt: DateTime.tryParse(record['last_accessed']?.toString() ?? ''),
+          );
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => LessonDetailScreen.fromModel(lesson),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 68,
+                  height: 68,
+                  child: thumbnail.isNotEmpty
+                      ? Image.network(
+                          thumbnail,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _learningThumbFallback(brightness),
+                        )
+                      : _learningThumbFallback(brightness),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      category,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryFor(brightness),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimaryFor(brightness),
+                        height: 1.18,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Watched ${_formatLastAccessed(record['last_accessed'])}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondaryFor(brightness),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.play_circle_fill_rounded,
+                color: AppColors.primaryFor(brightness),
+                size: 28,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _learningThumbFallback(Brightness brightness) {
+    return Container(
+      color: AppColors.surfaceFor(brightness),
+      child: Center(
+        child: Icon(
+          Icons.play_circle_fill_rounded,
+          size: 40,
+          color: AppColors.textSecondaryFor(brightness),
+        ),
+      ),
+    );
+  }
+
+  String _thumbnailForRecord(Map<String, dynamic> record) {
+    final thumbnail = record['thumbnail_url']?.toString().trim() ?? '';
+    if (thumbnail.isNotEmpty) return thumbnail;
+    final videoUrl = record['video_url']?.toString().trim() ?? '';
+    if (videoUrl.startsWith('yt:')) {
+      final id = videoUrl.substring(3).trim();
+      if (id.isNotEmpty) return 'https://img.youtube.com/vi/$id/hqdefault.jpg';
+    }
+    final uri = Uri.tryParse(videoUrl);
+    if (uri != null) {
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        return 'https://img.youtube.com/vi/${uri.pathSegments.first}/hqdefault.jpg';
+      }
+      if (uri.host.contains('youtube.com')) {
+        final v = uri.queryParameters['v'];
+        if (v != null && v.isNotEmpty) {
+          return 'https://img.youtube.com/vi/$v/hqdefault.jpg';
+        }
+      }
+    }
+    return '';
+  }
+
+  String _formatLastAccessed(dynamic value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) return 'recently';
+    return '${parsed.month}/${parsed.day}/${parsed.year}';
+  }
+}
+
+class _MyLearningRecordsPage extends StatelessWidget {
+  const _MyLearningRecordsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final brightness = Theme.of(context).brightness;
+    if (user == null) {
+      return Scaffold(
+        backgroundColor: AppColors.backgroundFor(brightness),
+        body: const Center(child: Text('no records')),
+      );
+    }
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: LearningRepository(Supabase.instance.client)
+          .fetchUserRecentLearningRecords(userUuid: user.id, limit: 1000),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? const <Map<String, dynamic>>[];
+        return Scaffold(
+          backgroundColor: AppColors.backgroundFor(brightness),
+          appBar: AppBar(
+            title: const Text('My Learning'),
+            backgroundColor: AppColors.backgroundFor(brightness),
+            foregroundColor: AppColors.textPrimaryFor(brightness),
+          ),
+          body: records.isEmpty
+              ? const Center(child: Text('no learning records'))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(AppDimensions.spacingLg),
+                  itemCount: records.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    return _LearningRecordCard(record: records[index]);
+                  },
+                ),
         );
       },
     );
@@ -622,6 +831,284 @@ class _MyLearningCategoriesSection extends StatelessWidget {
 
 
 // ── Section Header ────────────────────────────────────────────────────────
+
+class _SavedVideosSection extends ConsumerWidget {
+  final SavedVideosService _service = SavedVideosService();
+
+  _SavedVideosSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final brightness = Theme.of(context).brightness;
+    ref.watch(savedVideosRefreshProvider);
+    if (user == null) return const SizedBox.shrink();
+
+    return FutureBuilder<List<LessonModel>>(
+      future: _service.getSavedVideos(user.id),
+      builder: (context, snapshot) {
+        final videos = snapshot.data ?? const <LessonModel>[];
+        final visible = videos.take(3).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Saved Videos',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimaryFor(brightness),
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: videos.isEmpty
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => _SavedVideosPage(videos: videos),
+                            ),
+                          );
+                        },
+                  child: Text(
+                    'View All',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: videos.isEmpty
+                          ? AppColors.textSecondaryFor(brightness).withValues(alpha: 0.5)
+                          : AppColors.primaryFor(brightness).withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimensions.spacingMd),
+            if (videos.isEmpty)
+              const _NoRecordsCard(message: 'no saved videos')
+            else
+              Column(
+                children: visible
+                    .map(
+                      (lesson) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _SavedVideoListItem(lesson: lesson),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SavedVideoListItem extends StatelessWidget {
+  final LessonModel lesson;
+  const _SavedVideoListItem({required this.lesson});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final thumbnail = _thumbnailForLesson(lesson);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceFor(brightness),
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        border: Border.all(
+          color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => LessonDetailScreen.fromModel(lesson),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  width: 74,
+                  height: 74,
+                  child: thumbnail.isNotEmpty
+                      ? Image.network(
+                          thumbnail,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _thumbnailFallback(brightness),
+                        )
+                      : _thumbnailFallback(brightness),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      lesson.category,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryFor(brightness),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      lesson.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimaryFor(brightness),
+                        height: 1.18,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      lesson.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.25,
+                        color: AppColors.textSecondaryFor(brightness),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.play_circle_fill_rounded,
+                color: AppColors.primaryFor(brightness),
+                size: 28,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _thumbnailFallback(Brightness brightness) {
+    return Container(
+      color: AppColors.surfaceFor(brightness),
+      child: Center(
+        child: Icon(
+          Icons.play_circle_fill_rounded,
+          size: 42,
+          color: AppColors.textSecondaryFor(brightness),
+        ),
+      ),
+    );
+  }
+
+  String _thumbnailForLesson(LessonModel lesson) {
+    final thumbnail = lesson.thumbnailUrl?.trim() ?? '';
+    if (thumbnail.isNotEmpty) return thumbnail;
+
+    final videoUrl = lesson.videoUrl?.trim() ?? '';
+    if (videoUrl.startsWith('yt:')) {
+      final videoId = videoUrl.substring(3).trim();
+      if (videoId.isNotEmpty) {
+        return 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+      }
+    }
+
+    final ytId = _extractYoutubeVideoId(videoUrl);
+    if (ytId != null) {
+      return 'https://img.youtube.com/vi/$ytId/hqdefault.jpg';
+    }
+
+    return '';
+  }
+
+  String? _extractYoutubeVideoId(String url) {
+    if (url.isEmpty) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    if (uri.host.contains('youtu.be')) {
+      return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+    }
+    if (uri.host.contains('youtube.com')) {
+      final v = uri.queryParameters['v'];
+      if (v != null && v.isNotEmpty) return v;
+    }
+    return null;
+  }
+}
+
+class _SavedVideosPage extends StatelessWidget {
+  final List<LessonModel> videos;
+  const _SavedVideosPage({required this.videos});
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    return Scaffold(
+      backgroundColor: AppColors.backgroundFor(brightness),
+      appBar: AppBar(
+        title: const Text('Saved Videos'),
+        backgroundColor: AppColors.backgroundFor(brightness),
+        foregroundColor: AppColors.textPrimaryFor(brightness),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(AppDimensions.spacingLg),
+        itemCount: videos.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final lesson = videos[index];
+          return _SavedVideoListItem(lesson: lesson);
+        },
+      ),
+    );
+  }
+
+  String _thumbnailForLesson(LessonModel lesson) {
+    final thumbnail = lesson.thumbnailUrl?.trim() ?? '';
+    if (thumbnail.isNotEmpty) return thumbnail;
+
+    final videoUrl = lesson.videoUrl?.trim() ?? '';
+    if (videoUrl.startsWith('yt:')) {
+      final videoId = videoUrl.substring(3).trim();
+      if (videoId.isNotEmpty) {
+        return 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+      }
+    }
+
+    final uri = Uri.tryParse(videoUrl);
+    if (uri != null) {
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        return 'https://img.youtube.com/vi/${uri.pathSegments.first}/hqdefault.jpg';
+      }
+      if (uri.host.contains('youtube.com')) {
+        final v = uri.queryParameters['v'];
+        if (v != null && v.isNotEmpty) {
+          return 'https://img.youtube.com/vi/$v/hqdefault.jpg';
+        }
+      }
+    }
+
+    return '';
+  }
+}
 
 class _SectionHeader extends StatelessWidget {
   final String title;

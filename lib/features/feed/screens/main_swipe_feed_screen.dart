@@ -10,6 +10,7 @@ import '../../../core/services/session_manager.dart';
 import '../../learning/models/lesson_model.dart';
 import '../../learning/models/lesson_comment_model.dart';
 import '../../learning/repositories/learning_repository.dart';
+import '../../learning/services/saved_videos_service.dart';
 import '../../profile/screens/profile_screen.dart';
 import '../controllers/feed_providers.dart';
 
@@ -46,10 +47,12 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen>
   }
 
   final LearningRepository _repo = LearningRepository(Supabase.instance.client);
+  final SavedVideosService _savedVideosService = SavedVideosService();
   final Map<String, int> _likeCounts = {};
   final Map<String, bool> _isLikedByMe = {};
   final Map<String, int> _commentCounts = {};
   final Map<String, bool> _saved = {};
+  final Set<String> _watchedLessonIds = {};
   List<LessonModel> _allLessons = [];
   Set<String> _loadedMetaLessonIds = {};
   bool _metaLoading = false;
@@ -157,6 +160,22 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen>
     });
   }
 
+  Future<void> _markLessonWatched(LessonModel lesson) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null || lesson.id.isEmpty) return;
+    if (_watchedLessonIds.contains(lesson.id)) return;
+    _watchedLessonIds.add(lesson.id);
+    try {
+      await _repo.logLessonCompletion(
+        userUuid: currentUser.id,
+        lessonId: lesson.id,
+        score: 0,
+      );
+    } catch (_) {
+      _watchedLessonIds.remove(lesson.id);
+    }
+  }
+
   void _openComments(BuildContext context, LessonModel lesson) {
     showModalBottomSheet(
       context: context,
@@ -210,11 +229,35 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen>
     }
   }
 
-  void _toggleSave(LessonModel lesson) {
+  Future<void> _toggleSave(LessonModel lesson) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to save videos')),
+      );
+      return;
+    }
     final isSaved = !(_saved[lesson.id] ?? false);
     setState(() {
       _saved[lesson.id] = isSaved;
     });
+    try {
+      if (isSaved) {
+        await _savedVideosService.saveVideo(currentUser.id, lesson);
+      } else {
+        await _savedVideosService.removeVideo(currentUser.id, lesson.id);
+      }
+      ref.read(savedVideosRefreshProvider.notifier).state++;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saved[lesson.id] = !isSaved;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't update saved videos")),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -313,6 +356,13 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen>
           data: (lessons) {
             _allLessons = lessons;
             _scheduleMetaLoad(lessons);
+            if (lessons.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted || lessons.isEmpty) return;
+                final activeIndex = _activeIndex.clamp(0, lessons.length - 1);
+                _markLessonWatched(lessons[activeIndex]);
+              });
+            }
 
             if (lessons.isEmpty) {
               return Scaffold(
@@ -342,6 +392,7 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen>
                       setState(() {
                         _activeIndex = index;
                       });
+                      _markLessonWatched(lessons[index]);
                     },
                     itemBuilder: (context, index) {
                       final lesson = lessons[index];

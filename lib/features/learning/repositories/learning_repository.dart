@@ -735,6 +735,71 @@ class LearningRepository {
     }
   }
 
+  /// Returns the most recently watched lessons for the user.
+  /// Each record includes lesson title, category, thumbnail, and last accessed time.
+  Future<List<Map<String, dynamic>>> fetchUserRecentLearningRecords({
+    required String userUuid,
+    int limit = 3,
+  }) async {
+    try {
+      final progress = await _supabase
+          .from('user_progress')
+          .select('lesson_id,last_accessed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true)
+          .order('last_accessed', ascending: false)
+          .limit(120);
+
+      final progressList = progress as List<dynamic>;
+      final lessonIds = progressList
+          .map((e) => (e as Map<String, dynamic>)['lesson_id']?.toString())
+          .whereType<String>()
+          .toSet()
+          .toList();
+
+      if (lessonIds.isEmpty) return [];
+
+      final lessons = await _supabase
+          .from('lessons')
+          .select('id,title,category,thumbnail_url,video_path,video_url')
+          .inFilter('id', lessonIds);
+
+      final lessonById = <String, Map<String, dynamic>>{};
+      for (final rowAny in (lessons as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final id = row['id']?.toString();
+        if (id == null) continue;
+        lessonById[id] = row;
+      }
+
+      final records = <Map<String, dynamic>>[];
+      final seen = <String>{};
+      for (final rowAny in progressList) {
+        final row = rowAny as Map<String, dynamic>;
+        final lid = row['lesson_id']?.toString();
+        if (lid == null || seen.contains(lid)) continue;
+        final lesson = lessonById[lid];
+        if (lesson == null) continue;
+        seen.add(lid);
+        records.add({
+          'lesson_id': lid,
+          'title': lesson['title']?.toString() ?? 'Untitled',
+          'category': lesson['category']?.toString() ?? 'General',
+          'thumbnail_url': lesson['thumbnail_url']?.toString(),
+          'video_url': lesson['video_url']?.toString() ??
+              lesson['video_path']?.toString(),
+          'last_accessed': row['last_accessed']?.toString(),
+        });
+        if (records.length >= limit) break;
+      }
+
+      return records;
+    } catch (e, st) {
+      debugPrint('fetchUserRecentLearningRecords error: $e\n$st');
+      return [];
+    }
+  }
+
   /// Leaderboard based on total XP from `user_progress.score` (completed only).
   /// - weekly=true: only last 7 days from last_accessed
   Future<List<Map<String, dynamic>>> fetchLeaderboardFromProgress({

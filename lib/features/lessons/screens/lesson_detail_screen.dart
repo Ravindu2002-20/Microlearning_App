@@ -143,6 +143,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       if (mounted) setState(() => _metaLoading = false);
       await _resolveStorageVideo(lesson);
     }
+
+    await _markLessonWatched(lesson.id);
   }
 
   // ── Storage video resolution ──────────────────────────────────────────────
@@ -168,6 +170,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         _lesson = resolved;
         _thumbnailUrl = resolved!.thumbnailUrl ?? _thumbnailUrl;
         await _initChewie(resolved.videoUrl!);
+        await _markLessonWatched(resolved.id);
       } else {
         setState(() {
           _videoLoading = false;
@@ -181,6 +184,20 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
         _videoLoading = false;
         _videoError   = 'This lesson video is unavailable right now. It may have been moved or overwritten.';
       });
+    }
+  }
+
+  Future<void> _markLessonWatched(String lessonId) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null || lessonId.isEmpty) return;
+      await LearningRepository(Supabase.instance.client).logLessonCompletion(
+        userUuid: user.id,
+        lessonId: lessonId,
+        score: 0,
+      );
+    } catch (e) {
+      debugPrint('markLessonWatched error: $e');
     }
   }
 

@@ -85,10 +85,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       return Scaffold(
-        backgroundColor: AppColors.backgroundDark,
+        backgroundColor: AppColors.backgroundFor(brightness),
         body: SafeArea(
           child: Center(
             child: Padding(
@@ -96,13 +97,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.person_off_rounded,
-                      size: 72, color: AppColors.textSecondaryDark),
+                  Icon(Icons.person_off_rounded,
+                      size: 72, color: AppColors.textSecondaryFor(brightness)),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'You are signed out',
                     style: TextStyle(
-                      color: AppColors.textPrimaryDark,
+                      color: AppColors.textPrimaryFor(brightness),
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
@@ -112,7 +113,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     'Log in to see your profile, saved lessons, and progress.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: AppColors.textSecondaryDark,
+                      color: AppColors.textSecondaryFor(brightness),
                       fontSize: 14,
                       height: 1.4,
                     ),
@@ -135,7 +136,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         borderRadius:
                             BorderRadius.circular(AppDimensions.radiusMd),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Log In',
                         style: TextStyle(
                           color: Colors.white,
@@ -154,7 +155,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: AppColors.backgroundFor(brightness),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(
@@ -170,7 +171,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   icon: Icons.settings_outlined,
                   onTap: _showSettings,
                   size: 40,
-                  iconColor: AppColors.textSecondaryDark,
+                  iconColor: AppColors.textSecondaryFor(brightness),
                 ),
               ],
             ),
@@ -220,6 +221,7 @@ class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
+    final brightness = Theme.of(context).brightness;
 
     return FutureBuilder<Map<String, dynamic>?>(
       future: user == null
@@ -271,9 +273,9 @@ class _ProfileHeader extends StatelessWidget {
               ),
               padding: const EdgeInsets.all(4),
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.backgroundDark,
+                  color: AppColors.backgroundFor(brightness),
                 ),
                 padding: const EdgeInsets.all(3),
                 child: ClipOval(
@@ -292,10 +294,10 @@ class _ProfileHeader extends StatelessWidget {
             // Name + Username
             Text(
               displayName ?? 'No records',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
-                color: AppColors.textPrimaryDark,
+                color: AppColors.textPrimaryFor(brightness),
                 letterSpacing: -0.3,
               ),
               textAlign: TextAlign.center,
@@ -315,10 +317,10 @@ class _ProfileHeader extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   handle ?? '@user',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondaryDark,
+                    color: AppColors.textSecondaryFor(brightness),
                   ),
                 ),
               ],
@@ -333,13 +335,13 @@ class _ProfileHeader extends StatelessWidget {
                   vertical: AppDimensions.spacingSm,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceDark,
+                  color: AppColors.surfaceFor(brightness),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
                   border: Border.all(
-                    color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                    color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
                   ),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
@@ -352,7 +354,7 @@ class _ProfileHeader extends StatelessWidget {
                       'Learning AI one lesson at a time.',
                       style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.textSecondaryDark,
+                        color: AppColors.textSecondaryFor(brightness),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -366,17 +368,17 @@ class _ProfileHeader extends StatelessWidget {
                   vertical: AppDimensions.spacingSm,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceDark,
+                  color: AppColors.surfaceFor(brightness),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
                   border: Border.all(
-                    color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                    color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
                   ),
                 ),
-                child: const Text(
+                child: Text(
                   'no records',
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.textSecondaryDark,
+                    color: AppColors.textSecondaryFor(brightness),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -407,8 +409,9 @@ class _InitialAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Container(
-      color: AppColors.backgroundDark,
+      color: AppColors.backgroundFor(brightness),
       alignment: Alignment.center,
       child: Text(
         initials,
@@ -428,24 +431,25 @@ class _InitialAvatar extends StatelessWidget {
 class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       return Container(
         padding: const EdgeInsets.all(AppDimensions.spacingLg),
         decoration: BoxDecoration(
-          color: AppColors.surfaceDark,
+          color: AppColors.surfaceFor(brightness),
           borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
           border: Border.all(
-            color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+            color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
           ),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'no records',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondaryDark,
+              color: AppColors.textSecondaryFor(brightness),
             ),
           ),
         ),
@@ -460,10 +464,10 @@ class _StatsRow extends StatelessWidget {
           return Container(
             padding: const EdgeInsets.all(AppDimensions.spacingLg),
             decoration: BoxDecoration(
-              color: AppColors.surfaceDark,
+              color: AppColors.surfaceFor(brightness),
               borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
               border: Border.all(
-                color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
               ),
             ),
             child: const Center(
@@ -500,10 +504,10 @@ class _StatsRow extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(AppDimensions.spacingLg),
           decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
+            color: AppColors.surfaceFor(brightness),
             borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
             border: Border.all(
-              color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+              color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
             ),
           ),
           child: Row(
@@ -527,10 +531,10 @@ class _StatsRow extends StatelessWidget {
                     const SizedBox(height: AppDimensions.spacingXs),
                     Text(
                       stat.value,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimaryDark,
+                        color: AppColors.textPrimaryFor(brightness),
                         height: 1.1,
                       ),
                     ),
@@ -539,7 +543,7 @@ class _StatsRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondaryDark,
+                        color: AppColors.textSecondaryFor(brightness),
                       ),
                     ),
                   ],
@@ -563,7 +567,7 @@ class _StatsRow extends StatelessWidget {
       case 'Rank':
         return AppColors.secondaryDark;
       default:
-        return AppColors.textSecondaryDark;
+        return AppColors.textSecondaryLight;
     }
   }
 }
@@ -632,14 +636,15 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Row(
       children: [
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
-            color: AppColors.textPrimaryDark,
+            color: AppColors.textPrimaryFor(brightness),
             letterSpacing: -0.2,
           ),
         ),
@@ -651,7 +656,7 @@ class _SectionHeader extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: AppColors.primaryDark.withValues(alpha: 0.8),
+              color: AppColors.primaryFor(brightness).withValues(alpha: 0.8),
             ),
           ),
         ),
@@ -668,6 +673,7 @@ class _CategoryChipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     // Simple card-like chip for now; can be enhanced to include count/icon.
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -675,10 +681,10 @@ class _CategoryChipCard extends StatelessWidget {
         vertical: AppDimensions.spacingMd,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: AppColors.surfaceFor(brightness),
         borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
         border: Border.all(
-          color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
+          color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.06),
         ),
       ),
       child: Text(
@@ -688,7 +694,7 @@ class _CategoryChipCard extends StatelessWidget {
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimaryDark,
+          color: AppColors.textPrimaryFor(brightness),
         ),
       ),
     );
@@ -719,6 +725,7 @@ class _LeaderboardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -739,12 +746,12 @@ class _LeaderboardSection extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppDimensions.spacingSm),
-            const Text(
+            Text(
               'Leaderboard',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: AppColors.textPrimaryDark,
+                color: AppColors.textPrimaryFor(brightness),
                 letterSpacing: -0.2,
               ),
             ),
@@ -752,10 +759,10 @@ class _LeaderboardSection extends StatelessWidget {
             // Toggle
             Container(
               decoration: BoxDecoration(
-                color: AppColors.surfaceDark,
+                color: AppColors.surfaceFor(brightness),
                 borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
                 border: Border.all(
-                  color: AppColors.textSecondaryDark.withValues(alpha: 0.1),
+                  color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.1),
                 ),
               ),
               child: Row(
@@ -842,6 +849,7 @@ class _ToggleOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -852,7 +860,7 @@ class _ToggleOption extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primaryDark.withValues(alpha: 0.2)
+              ? AppColors.primaryFor(brightness).withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
         ),
@@ -862,8 +870,8 @@ class _ToggleOption extends StatelessWidget {
             fontSize: 12,
             fontWeight: FontWeight.w700,
             color: isSelected
-                ? AppColors.primaryDark
-                : AppColors.textSecondaryDark,
+                ? AppColors.primaryFor(brightness)
+                : AppColors.textSecondaryFor(brightness),
           ),
         ),
       ),
@@ -874,27 +882,28 @@ class _ToggleOption extends StatelessWidget {
 class _DividerWithDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Row(
       children: [
         Expanded(
           child: Container(
             height: 1,
-            color: AppColors.textSecondaryDark.withValues(alpha: 0.15),
+            color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.15),
           ),
         ),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 8),
           width: 6,
           height: 6,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppColors.textSecondaryDark,
+            color: AppColors.textSecondaryFor(brightness),
           ),
         ),
         Expanded(
           child: Container(
             height: 1,
-            color: AppColors.textSecondaryDark.withValues(alpha: 0.15),
+            color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.15),
           ),
         ),
       ],
@@ -908,13 +917,14 @@ class _NoRecordsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Container(
       padding: const EdgeInsets.all(AppDimensions.spacingLg),
       decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: AppColors.surfaceFor(brightness),
         borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
         border: Border.all(
-          color: AppColors.textSecondaryDark.withValues(alpha: 0.06),
+          color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.06),
         ),
       ),
       child: Text(
@@ -922,7 +932,7 @@ class _NoRecordsCard extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: AppColors.textSecondaryDark,
+          color: AppColors.textSecondaryFor(brightness),
         ),
       ),
     );
@@ -943,6 +953,7 @@ class _LeaderboardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Container(
 
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingSm),
@@ -952,8 +963,8 @@ class _LeaderboardRow extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: entry.isCurrentUser
-            ? AppColors.primaryDark.withValues(alpha: 0.08)
-            : AppColors.surfaceDark,
+            ? AppColors.primaryFor(brightness).withValues(alpha: 0.08)
+            : AppColors.surfaceFor(brightness),
         borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
         border: entry.isCurrentUser
             ? Border.all(
@@ -974,8 +985,8 @@ class _LeaderboardRow extends StatelessWidget {
                 color: isTop3
                     ? _rankColor()
                     : entry.isCurrentUser
-                        ? AppColors.primaryDark
-                        : AppColors.textSecondaryDark,
+                        ? AppColors.primaryFor(brightness)
+                        : AppColors.textSecondaryFor(brightness),
               ),
             ),
           ),
@@ -990,8 +1001,8 @@ class _LeaderboardRow extends StatelessWidget {
                   ? AppColors.aiGradient
                   : LinearGradient(
                       colors: [
-                        AppColors.textSecondaryDark.withValues(alpha: 0.2),
-                        AppColors.textSecondaryDark.withValues(alpha: 0.2),
+                        AppColors.textSecondaryFor(brightness).withValues(alpha: 0.2),
+                        AppColors.textSecondaryFor(brightness).withValues(alpha: 0.2),
                       ],
                     ),
             ),
@@ -1003,7 +1014,7 @@ class _LeaderboardRow extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: entry.isCurrentUser
                       ? Colors.white
-                      : AppColors.textSecondaryDark,
+                      : AppColors.textSecondaryFor(brightness),
                 ),
               ),
             ),
@@ -1021,8 +1032,8 @@ class _LeaderboardRow extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: entry.isCurrentUser
-                        ? AppColors.primaryDark
-                        : AppColors.textPrimaryDark,
+                        ? AppColors.primaryFor(brightness)
+                        : AppColors.textPrimaryFor(brightness),
                   ),
                 ),
                 Text(
@@ -1030,7 +1041,7 @@ class _LeaderboardRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondaryDark,
+                    color: AppColors.textSecondaryFor(brightness),
                   ),
                 ),
               ],
@@ -1044,8 +1055,8 @@ class _LeaderboardRow extends StatelessWidget {
               fontSize: 13,
               fontWeight: FontWeight.w800,
               color: entry.isCurrentUser
-                  ? AppColors.primaryDark
-                  : AppColors.textPrimaryDark,
+                  ? AppColors.primaryFor(brightness)
+                  : AppColors.textPrimaryFor(brightness),
             ),
           ),
           const SizedBox(width: AppDimensions.spacingSm),
@@ -1076,7 +1087,7 @@ class _LeaderboardRow extends StatelessWidget {
     if (entry.rank == 1) return const Color(0xFFFFD700);
     if (entry.rank == 2) return const Color(0xFFC0C0C0);
     if (entry.rank == 3) return const Color(0xFFCD7F32);
-    return AppColors.textSecondaryDark;
+    return AppColors.textSecondaryLight;
   }
 
   String _initials(String name) {
@@ -1095,6 +1106,7 @@ class _LeaderboardRow extends StatelessWidget {
 class _SettingsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final settings = [
       _SettingItem(Icons.person_outline, 'Edit Profile'),
       _SettingItem(Icons.notifications_outlined, 'Notifications'),
@@ -1115,11 +1127,11 @@ class _SettingsSheet extends StatelessWidget {
             bottom: AppDimensions.spacingXxl,
           ),
           decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
+            color: AppColors.surfaceFor(brightness),
             borderRadius: BorderRadius.circular(AppDimensions.cardRadiusLg),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: Colors.black.withValues(alpha: brightness == Brightness.dark ? 0.4 : 0.08),
                 blurRadius: 32,
                 offset: const Offset(0, 8),
               ),
@@ -1135,12 +1147,12 @@ class _SettingsSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textSecondaryDark.withValues(alpha: 0.3),
+                color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(
+            Padding(
+              padding: const EdgeInsets.symmetric(
                 horizontal: AppDimensions.spacingXxl,
                 vertical: AppDimensions.spacingMd,
               ),
@@ -1149,15 +1161,16 @@ class _SettingsSheet extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimaryDark,
+                  color: AppColors.textPrimaryFor(brightness),
                 ),
               ),
             ),
-            const Divider(height: 1, color: AppColors.textSecondaryDark),
+            Divider(height: 1, color: AppColors.textSecondaryFor(brightness)),
             Consumer(
               builder: (context, ref, _) {
                 final themeMode = ref.watch(themeProvider);
                 final isDark = themeMode == ThemeMode.dark;
+                final currentBrightness = isDark ? Brightness.dark : Brightness.light;
 
                 return Container(
                   margin: const EdgeInsets.symmetric(
@@ -1169,7 +1182,7 @@ class _SettingsSheet extends StatelessWidget {
                     vertical: AppDimensions.spacingMd,
                   ),
                   decoration: BoxDecoration(
-                    color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                    color: AppColors.surfaceFor(currentBrightness),
                     borderRadius:
                         BorderRadius.circular(AppDimensions.cardRadiusMd),
                   ),
@@ -1203,9 +1216,7 @@ class _SettingsSheet extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? AppColors.textPrimaryDark
-                                    : AppColors.textPrimaryLight,
+                                color: AppColors.textPrimaryFor(currentBrightness),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -1213,9 +1224,7 @@ class _SettingsSheet extends StatelessWidget {
                               isDark ? 'Dark mode' : 'Light mode',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isDark
-                                    ? AppColors.textSecondaryDark
-                                    : AppColors.textSecondaryLight,
+                                color: AppColors.textSecondaryFor(currentBrightness),
                               ),
                             ),
                           ],
@@ -1457,6 +1466,7 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return InkWell(
       onTap: () async {
         // Close the sheet first.
@@ -1482,30 +1492,30 @@ class _SettingsTile extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
               ),
               child: Icon(
                 item.icon,
                 size: 18,
-                color: AppColors.textSecondaryDark,
+                color: AppColors.textSecondaryFor(brightness),
               ),
             ),
             const SizedBox(width: AppDimensions.spacingMd),
             Expanded(
               child: Text(
                 item.label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimaryDark,
+                  color: AppColors.textPrimaryFor(brightness),
                 ),
               ),
             ),
             Icon(
               Icons.chevron_right_rounded,
               size: 20,
-              color: AppColors.textSecondaryDark,
+              color: AppColors.textSecondaryFor(brightness),
             ),
           ],
         ),

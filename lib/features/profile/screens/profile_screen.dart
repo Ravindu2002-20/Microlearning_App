@@ -427,8 +427,8 @@ class _InitialAvatar extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         initials,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: AppColors.textPrimaryFor(brightness),
           fontSize: 28,
           fontWeight: FontWeight.w800,
         ),
@@ -1500,7 +1500,7 @@ class _LeaderboardRow extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: entry.isCurrentUser
-                      ? Colors.white
+                      ? AppColors.textPrimaryFor(brightness)
                       : AppColors.textSecondaryFor(brightness),
                 ),
               ),

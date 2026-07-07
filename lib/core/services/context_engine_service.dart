@@ -9,7 +9,7 @@ class UserContextState {
   final AppNetworkStrength networkStrength;
   final bool isInMotion;
 
-  UserContextState({
+  const UserContextState({
     required this.networkStrength,
     required this.isInMotion,
   });

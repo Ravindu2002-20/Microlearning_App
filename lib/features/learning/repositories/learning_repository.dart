@@ -1,12 +1,26 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
+import '../models/lesson_item.dart';
 import '../models/lesson_model.dart';
 import '../models/lesson_comment_model.dart';
 import '../models/video_model.dart';
 import '../../../core/services/context_engine_service.dart';
 
 const _kLessonVideoBucket = 'lesson_videos';
+
+class VideoUploadResult {
+  final String? path;
+  final String? errorMessage;
+
+  const VideoUploadResult.success(this.path) : errorMessage = null;
+  const VideoUploadResult.failure(this.errorMessage) : path = null;
+
+  bool get isSuccess => path != null;
+}
 
 class LearningRepository {
   final SupabaseClient _supabase;
@@ -17,6 +31,173 @@ class LearningRepository {
   static final Set<String> _shownFeedIds = <String>{};
 
   LearningRepository(this._supabase);
+
+  Future<VideoUploadResult> uploadVideoToStorage(
+    String filePath,
+    String objectPath,
+  ) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) {
+        return const VideoUploadResult.failure(
+          'Selected video file could not be found.',
+        );
+      }
+
+      final fileSizeBytes = await file.length();
+      const maxBytes = 200 * 1024 * 1024;
+      if (fileSizeBytes > maxBytes) {
+        return const VideoUploadResult.failure(
+          'Video is too large. Please choose a file under 200MB.',
+        );
+      }
+
+      await _supabase.storage.from(_kLessonVideoBucket).upload(
+            objectPath,
+            file,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'video/mp4',
+            ),
+          );
+      return VideoUploadResult.success(objectPath);
+    } on StorageException catch (e) {
+      debugPrint(
+        'Video upload StorageException: ${e.message} (statusCode: ${e.statusCode})',
+      );
+      return VideoUploadResult.failure('Upload failed: ${e.message}');
+    } catch (e) {
+      debugPrint('Video upload unexpected error: $e');
+      return const VideoUploadResult.failure(
+        'Upload failed. Please check your connection and try again.',
+      );
+    }
+  }
+
+  Future<String?> uploadThumbnailToStorage(
+    String filePath,
+    String fileName,
+  ) async {
+    try {
+      await _supabase.storage.from('lesson-thumbnails').upload(
+            fileName,
+            File(filePath),
+          );
+      return _supabase.storage.from('lesson-thumbnails').getPublicUrl(fileName);
+    } catch (e) {
+      debugPrint('Thumbnail upload error: $e');
+      return null;
+    }
+  }
+
+  Future<List<LessonItem>> getAllLessonItems() async {
+    final results = await Future.wait([
+      _fetchApprovedLessons(),
+      _fetchYouTubeVideos(),
+    ]);
+
+    final items = <LessonItem>[
+      ...results[0] as List<StorageLesson>,
+      ...results[1] as List<YoutubeVideo>,
+    ];
+
+    items.sort((a, b) {
+      final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bDate.compareTo(aDate);
+    });
+
+    return items;
+  }
+
+  Future<LessonModel?> getLessonById(String lessonId) async {
+    try {
+      final response = await _supabase
+          .from('lessons')
+          .select()
+          .eq('id', lessonId)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      final lesson = LessonModel.fromJson(response);
+      if (lesson.videoUrl != null && lesson.videoUrl!.startsWith('http')) {
+        return lesson;
+      }
+
+      final videoPath = response['video_path']?.toString();
+      if (videoPath != null && videoPath.isNotEmpty) {
+        final publicUrl = _publicVideoUrl(videoPath);
+        if (publicUrl != null) {
+          return lesson.copyWith(videoUrl: publicUrl);
+        }
+      }
+
+      return lesson;
+    } catch (e) {
+      debugPrint('getLessonById error: $e');
+      return null;
+    }
+  }
+
+  Future<VideoModel?> getVideoById(String videoId) async {
+    try {
+      final response = await _supabase
+          .from('videos')
+          .select()
+          .eq('id', videoId)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return VideoModel.fromJson(response);
+    } catch (e) {
+      debugPrint('getVideoById error: $e');
+      return null;
+    }
+  }
+
+  Future<List<LessonModel>> getApprovedLessons() async {
+    try {
+      return await _fetchApprovedLessons();
+    } catch (e) {
+      debugPrint('getApprovedLessons error: $e');
+      return [];
+    }
+  }
+
+  Future<List<LessonModel>> getPendingLessons() async {
+    try {
+      final response = await _supabase
+          .from('lessons')
+          .select()
+          .eq('status', 'pending')
+          .order('created_at', ascending: false);
+      return (response as List)
+          .map((json) => LessonModel.fromJson(json))
+          .toList();
+    } catch (e) {
+      debugPrint('getPendingLessons error: $e');
+      return [];
+    }
+  }
+
+  Future<void> submitLesson({
+    required LessonModel lesson,
+    required String videoPath,
+    String? thumbnailUrl,
+  }) async {
+    final lessonId = lesson.id.isEmpty ? const Uuid().v4() : lesson.id;
+    final payload = lesson.copyWith(
+      id: lessonId,
+      videoUrl: videoPath,
+      thumbnailUrl: thumbnailUrl ?? lesson.thumbnailUrl,
+      status: 'pending',
+      isPublished: false,
+      createdAt: lesson.createdAt ?? DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await _supabase.from('lessons').insert(payload.toJson());
+  }
 
   // ── Upload / admin ────────────────────────────────────────────────────────
 
@@ -73,6 +254,8 @@ class LearningRepository {
         'is_published': true,
         'reviewed_by': adminId,
         'reviewed_at': DateTime.now().toIso8601String(),
+        'approved_by': adminId,
+        'approved_at': DateTime.now().toIso8601String(),
       }).eq('id', lessonId);
       return true;
     } catch (e) {
@@ -652,8 +835,11 @@ class LearningRepository {
   /// Fetches approved, published lessons from `public.lessons`.
   /// Applies context filters (motion, network strength) that only exist here.
   Future<List<LessonModel>> _fetchApprovedLessons({
-    required UserContextState ambientContext,
-    required List<String> completedIds,
+    UserContextState ambientContext = const UserContextState(
+      networkStrength: AppNetworkStrength.strong,
+      isInMotion: false,
+    ),
+    List<String> completedIds = const [],
     List<String> categories = const [],
   }) async {
     try {
@@ -767,5 +953,20 @@ class LearningRepository {
       debugPrint('_fetchYouTubeVideos error: $e\n$st');
       return [];
     }
+  }
+
+  String? _publicVideoUrl(String? objectPath) {
+    if (objectPath == null) return null;
+
+    // TODO: The lesson_videos bucket still needs public-read access for non-authenticated playback.
+    final cleanPath = objectPath.trim();
+    if (cleanPath.isEmpty) return null;
+    if (cleanPath.startsWith('http')) return cleanPath;
+
+    final normalizedPath = cleanPath.startsWith('$_kLessonVideoBucket/')
+        ? cleanPath.substring(_kLessonVideoBucket.length + 1)
+        : cleanPath;
+
+    return _supabase.storage.from(_kLessonVideoBucket).getPublicUrl(normalizedPath);
   }
 }

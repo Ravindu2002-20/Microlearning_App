@@ -4,14 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/constants/constants.dart';
 import '../../learning/models/lesson_item.dart';
-import '../../learning/repositories/lesson_repository.dart';
+import '../../learning/repositories/learning_repository.dart';
 import 'lesson_detail_screen.dart';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 final allLessonItemsProvider =
     FutureProvider.autoDispose<List<LessonItem>>((ref) async {
-  final repo = LessonRepository(Supabase.instance.client);
+  final repo = LearningRepository(Supabase.instance.client);
   return repo.getAllLessonItems();
 });
 

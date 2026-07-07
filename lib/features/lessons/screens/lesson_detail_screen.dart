@@ -8,7 +8,7 @@ import '../../../core/constants/constants.dart';
 import '../../learning/models/lesson_item.dart';
 import '../../learning/models/lesson_model.dart';
 import '../../learning/models/video_model.dart';
-import '../../learning/repositories/lesson_repository.dart';
+import '../../learning/repositories/learning_repository.dart';
 
 // ignore_for_file: prefer_const_constructors_in_immutables, use_super_parameters
 
@@ -160,7 +160,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     setState(() => _videoLoading = true);
 
     try {
-      final repo   = LessonRepository(Supabase.instance.client);
+      final repo   = LearningRepository(Supabase.instance.client);
       final resolved = await repo.getLessonById(lesson.id);
       if (!mounted) return;
 

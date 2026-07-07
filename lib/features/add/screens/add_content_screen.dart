@@ -2,10 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/constants.dart';
 import '../../learning/models/lesson_model.dart';
-import '../../learning/repositories/lesson_repository.dart';
 import '../../learning/repositories/learning_repository.dart';
 
 final _myUploadsProvider =
@@ -210,8 +210,9 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
 
     setState(() => _loading = true);
 
+    final lessonId = const Uuid().v4();
     final lesson = LessonModel(
-      id: '',
+      id: lessonId,
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       content: _contentCtrl.text.trim(),
@@ -227,28 +228,32 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
       updatedAt: DateTime.now(),
     );
 
-    final repo = LessonRepository(Supabase.instance.client);
+    final repo = LearningRepository(Supabase.instance.client);
 
     try {
       final videoPath = _selectedVideo!.path!;
-      final fileName = 'public/${user.id}/video.mp4';
+      final videoExtension = _selectedVideo!.extension ?? 'mp4';
+      final fileName = 'public/${user.id}/$lessonId.$videoExtension';
 
-      final uploadedPath = await repo.uploadVideoToStorage(videoPath, fileName);
-      if (uploadedPath == null) throw Exception('Video upload failed');
+      final uploadResult = await repo.uploadVideoToStorage(videoPath, fileName);
+      if (!uploadResult.isSuccess) {
+        throw Exception(uploadResult.errorMessage ?? 'Video upload failed');
+      }
+      final uploadedPath = uploadResult.path!;
 
       await repo.submitLesson(
         lesson: lesson,
         videoPath: uploadedPath,
         thumbnailUrl: null,
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text(
-            'Upload failed. Please try again.',
-            style: TextStyle(color: Colors.white),
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+            style: const TextStyle(color: Colors.white),
           ),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
@@ -472,13 +477,26 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
                 ),
                 child: Center(
                   child: _loading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
+                      ? const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Uploading video...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         )
                       : const Text(
                           'Submit for Review',
@@ -525,7 +543,17 @@ class _UploadFormState extends ConsumerState<_UploadForm> {
                     withData: false,
                   );
                   if (!mounted || result == null) return;
-                  setState(() => _selectedVideo = result.files.single);
+                  final picked = result.files.single;
+                  const maxBytes = 200 * 1024 * 1024;
+                  if (picked.size > maxBytes) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Video is too large - please choose a file under 200MB.'),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => _selectedVideo = picked);
                 },
           child: Container(
             width: double.infinity,

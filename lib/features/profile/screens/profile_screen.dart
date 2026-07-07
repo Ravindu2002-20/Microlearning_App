@@ -6,7 +6,7 @@ import '../../../core/constants/constants.dart';
 
 import '../../../core/services/theme_service.dart';
 import '../../../core/widgets/glass_widgets.dart';
-import '../../auth/screens/login_registration_screen.dart';
+import '../../auth/screens/onboarding_screen.dart';
 import '../../learning/repositories/learning_repository.dart';
 
 
@@ -121,9 +121,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   GestureDetector(
                     onTap: () {
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (_) => const LoginRegistrationScreen(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const AuthScreen()),
                         (_) => false,
                       );
                     },
@@ -1390,15 +1388,20 @@ class _SettingsSheet extends StatelessWidget {
                     ),
                   );
                   if (confirmed != true) return;
-                  if (context.mounted) Navigator.pop(context);
-                  await performLogout();
-                  if (context.mounted) {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (_) => const LoginRegistrationScreen(),
-                      ),
+                  final rootNav = Navigator.of(context, rootNavigator: true);
+                  if (context.mounted) Navigator.of(context).pop();
+                  try {
+                    await performLogout();
+                    rootNav.pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const AuthScreen()),
                       (_) => false,
                     );
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Logout failed. Please try again.')),
+                      );
+                    }
                   }
                 },
                 child: Container(

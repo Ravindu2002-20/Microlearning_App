@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/services/onboarding_persistence.dart';
 import '../../../core/widgets/main_app_shell.dart';
+import '../../../core/widgets/admin_app_shell.dart';
+import '../../../core/services/admin_service.dart';
+import 'user_details_onboarding_screen.dart';
 import '../../../main.dart';
 
 
@@ -384,6 +387,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
 
     final auth = ref.read(authRepositoryProvider);
+    final prefsRepo = ref.read(userPreferencesRepositoryProvider);
 
     try {
       if (_isLogin) {
@@ -400,10 +404,32 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
 
       if (!mounted) return;
+      final user = auth.currentSessionUser;
+      if (user == null) return;
 
+      final hasUserDetails = await prefsRepo.isOnboardingComplete(user.id);
+      if (!mounted) return;
+      if (!hasUserDetails) {
+        Navigator.of(context).pushAndRemoveUntil(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondary) =>
+                const UserDetailsOnboardingScreen(),
+            transitionsBuilder: (context, animation, secondary, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+          (_) => false,
+        );
+        return;
+      }
+
+      final isAdmin = await ref.read(isAdminProvider.future);
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondary) => const MainAppShell(),
+          pageBuilder: (context, animation, secondary) =>
+              isAdmin ? const AdminAppShell() : const MainAppShell(),
           transitionsBuilder: (context, animation, secondary, child) {
             return FadeTransition(opacity: animation, child: child);
           },

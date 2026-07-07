@@ -36,10 +36,13 @@ final adaptiveLessonFeedProvider =
   final userUuid = Supabase.instance.client.auth.currentUser?.id;
   if (userUuid == null) return <LessonModel>[];
 
-  return repo.fetchAdaptiveViewportFeed(
+  final adaptive = await repo.fetchAdaptiveViewportFeed(
     userUuid: userUuid,
     ambientContext: contextState,
   );
+
+  if (adaptive.isNotEmpty) return adaptive;
+  return repo.fetchAvailableLessonsPreview();
 });
 
 

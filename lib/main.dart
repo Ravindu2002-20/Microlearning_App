@@ -10,7 +10,6 @@ import 'core/services/theme_service.dart';
 import 'features/auth/repositaries/auth_repository.dart';
 import 'features/auth/repositaries/user_preferences_repository.dart';
 import 'features/auth/screens/onboarding_screen.dart';
-import 'features/auth/screens/login_registration_screen.dart';
 import 'features/auth/screens/user_details_onboarding_screen.dart';
 import 'core/widgets/main_app_shell.dart';
 import 'core/widgets/admin_app_shell.dart';
@@ -78,18 +77,17 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
 
   Future<void> _navigateToAppropriateScreen({required User? user}) async {
     if (!mounted) return;
+    final nav = Navigator.of(context);
 
     if (user == null) {
       // No session: onboarding once, then login.
       final completedOnboarding = ref.read(hasCompletedOnboardingProvider);
       if (!completedOnboarding) {
-        Navigator.of(context).pushReplacement(_fadeRoute(const OnboardingScreen()));
+        nav.pushReplacement(_fadeRoute(const OnboardingScreen()));
         return;
       }
 
-      Navigator.of(context).pushReplacement(
-        _fadeRoute(const LoginRegistrationScreen()),
-      );
+      nav.pushReplacement(_fadeRoute(const AuthScreen()));
       return;
     }
 
@@ -100,18 +98,14 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
     if (!mounted) return;
 
     if (!hasUserDetails) {
-      Navigator.of(context).pushReplacement(
-        _fadeRoute(const UserDetailsOnboardingScreen()),
-      );
+      nav.pushReplacement(_fadeRoute(const UserDetailsOnboardingScreen()));
       return;
     }
 
     final isAdmin = await ref.read(isAdminProvider.future);
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(
-      _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()),
-    );
+    nav.pushReplacement(_fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()));
   }
 
   @override
@@ -130,9 +124,16 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
       // Logout flow
       if (prevUser != null && nextUser == null) {
         Navigator.of(context).pushAndRemoveUntil(
-          _fadeRoute(const LoginRegistrationScreen()),
+          _fadeRoute(const AuthScreen()),
           (_) => false,
         );
+        return;
+      }
+
+      if (prevUser == null && nextUser != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await _navigateToAppropriateScreen(user: nextUser);
+        });
       }
     });
 
@@ -183,7 +184,7 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
               if (!mounted) return;
               // Fail safe: go to login.
               Navigator.of(context).pushAndRemoveUntil(
-                _fadeRoute(const LoginRegistrationScreen()),
+                _fadeRoute(const AuthScreen()),
                 (_) => false,
               );
             }

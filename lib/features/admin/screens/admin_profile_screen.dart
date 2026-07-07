@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/constants.dart';
 import '../../../core/services/admin_service.dart';
 import '../../../core/services/theme_service.dart';
-import '../../auth/screens/login_registration_screen.dart';
+import '../../auth/screens/onboarding_screen.dart';
 
 class AdminProfileScreen extends ConsumerWidget {
   const AdminProfileScreen({super.key});
@@ -54,9 +54,7 @@ class AdminProfileScreen extends ConsumerWidget {
                 GestureDetector(
                   onTap: () {
                     Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (_) => const LoginRegistrationScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const AuthScreen()),
                       (_) => false,
                     );
                   },
@@ -272,15 +270,18 @@ class AdminProfileScreen extends ConsumerWidget {
                           ),
                         );
                         if (confirmed != true) return;
-                        await performLogout();
-                        if (context.mounted) {
-                          Navigator.of(context).pushAndRemoveUntil(
+                        final rootNav =
+                            Navigator.of(context, rootNavigator: true);
+                        rootNav.pop();
+                        try {
+                          await performLogout();
+                          rootNav.pushAndRemoveUntil(
                             MaterialPageRoute(
-                              builder: (_) => const LoginRegistrationScreen(),
+                              builder: (_) => const AuthScreen(),
                             ),
                             (_) => false,
                           );
-                        }
+                        } catch (_) {}
                       },
                       child: Container(
                         width: double.infinity,

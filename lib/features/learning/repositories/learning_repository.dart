@@ -13,6 +13,7 @@ class LearningRepository {
   // Offline cache stores only Storage lessons (LessonModel).
   // YouTube videos are always fetched fresh.
   static List<LessonModel> _offlineLessonCache = [];
+  static final Set<String> _shownFeedIds = <String>{};
 
   LearningRepository(this._supabase);
 
@@ -68,6 +69,7 @@ class LearningRepository {
     try {
       await _supabase.from('lessons').update({
         'status': 'approved',
+        'is_published': true,
         'reviewed_by': adminId,
         'reviewed_at': DateTime.now().toIso8601String(),
       }).eq('id', lessonId);
@@ -83,6 +85,7 @@ class LearningRepository {
     try {
       await _supabase.from('lessons').update({
         'status': 'rejected',
+        'is_published': false,
         'reviewed_by': adminId,
         'reviewed_at': DateTime.now().toIso8601String(),
         'rejection_reason': reason,
@@ -198,6 +201,118 @@ class LearningRepository {
     }
   }
 
+  Future<bool> toggleLike(String lessonId) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final existing = await _supabase
+          .from('lesson_likes')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('lesson_id', lessonId)
+          .maybeSingle();
+      if (existing != null) {
+        await _supabase
+            .from('lesson_likes')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('lesson_id', lessonId);
+        return false;
+      }
+      await _supabase.from('lesson_likes').insert({
+        'user_id': user.id,
+        'lesson_id': lessonId,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('toggleLike error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> isLikedByMe(String lessonId) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return false;
+    try {
+      final existing = await _supabase
+          .from('lesson_likes')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('lesson_id', lessonId)
+          .maybeSingle();
+      return existing != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<int> getLikeCount(String lessonId) async {
+    try {
+      final rows = await _supabase
+          .from('lesson_likes')
+          .select('id')
+          .eq('lesson_id', lessonId);
+      return (rows as List).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchComments(String lessonId) async {
+    try {
+      final rows = await _supabase
+          .from('lesson_comments')
+          .select('id,user_id,content,created_at')
+          .eq('lesson_id', lessonId)
+          .order('created_at', ascending: true);
+      return (rows as List<dynamic>).cast<Map<String, dynamic>>();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Fallback feed that ignores ambient filters so the user always has
+  /// something to preview when the adaptive path is too strict.
+  Future<List<LessonModel>> fetchAvailableLessonsPreview({
+    int limit = 20,
+  }) async {
+    try {
+      final results = await Future.wait<List<LessonModel>>([
+        _fetchApprovedLessons(
+          ambientContext: UserContextState(
+            networkStrength: AppNetworkStrength.strong,
+            isInMotion: false,
+          ),
+          completedIds: const [],
+          categories: const [],
+        ),
+        _fetchYouTubeVideos(categories: const []),
+      ]);
+
+      final combined = [...results[0], ...results[1]]..shuffle();
+      return combined.take(limit).toList();
+    } catch (e, st) {
+      debugPrint('fetchAvailableLessonsPreview error: $e\n$st');
+      return [];
+    }
+  }
+
+  Future<bool> addComment(String lessonId, String text) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return false;
+    try {
+      await _supabase.from('lesson_comments').insert({
+        'user_id': user.id,
+        'lesson_id': lessonId,
+        'content': text,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('addComment error: $e');
+      return false;
+    }
+  }
+
   // ── Profile ───────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> fetchUserProfile({
@@ -268,27 +383,12 @@ class LearningRepository {
         }
       }
 
-      // rank: sum of xp per user (completed only)
-      final allCompleted = await _supabase
-          .from('user_progress')
-          .select('user_id,score')
-          .eq('is_completed', true);
-
-      final xpByUser = <String, int>{};
-      for (final rowAny in (allCompleted as List<dynamic>)) {
-        final row = rowAny as Map<String, dynamic>;
-        final uid = row['user_id']?.toString();
-        if (uid == null) continue;
-        final score = row['score'];
-        final sc = score == null ? 0 : (score as num).toInt();
-        xpByUser[uid] = (xpByUser[uid] ?? 0) + sc;
-      }
-
-      final sorted = xpByUser.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      final idx = sorted.indexWhere((e) => e.key == userUuid);
-      final rank = idx >= 0 ? idx + 1 : sorted.length + 1;
+      final rankRows = await _supabase.rpc('get_user_rank', params: {
+        'target_user_id': userUuid,
+      });
+      final rank = rankRows is List && rankRows.isNotEmpty
+          ? (rankRows.first as Map<String, dynamic>)['rank'] ?? 0
+          : 0;
 
       return {
         'lessonsCount': lessonsCount,
@@ -374,73 +474,29 @@ class LearningRepository {
     int limit = 10,
   }) async {
     try {
-      final now = DateTime.now();
-      final start = now.subtract(const Duration(days: 7));
+      final rows = await _supabase.rpc('get_leaderboard', params: {
+        'weekly': weekly,
+        'limit_count': limit,
+      });
 
-      var query = _supabase
-          .from('user_progress')
-          .select('user_id,score')
-          .eq('is_completed', true);
-
-      if (weekly) {
-        query = query.gte('last_accessed', start.toIso8601String());
-      }
-
-      final rows = await query;
-
-      final xpByUser = <String, int>{};
-      for (final rowAny in (rows as List<dynamic>)) {
+      return (rows as List<dynamic>).map((rowAny) {
         final row = rowAny as Map<String, dynamic>;
-        final uid = row['user_id']?.toString();
-        if (uid == null) continue;
-        final score = row['score'];
-        final sc = score == null ? 0 : (score as num).toInt();
-        xpByUser[uid] = (xpByUser[uid] ?? 0) + sc;
-      }
-
-      if (xpByUser.isEmpty) return [];
-
-      final sorted = xpByUser.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      final top = sorted.take(limit).toList();
-      final ids = top.map((e) => e.key).toList();
-
-      final profileRows = await _supabase
-          .from('profiles')
-          .select('id,full_name,username')
-          .inFilter('id', ids);
-
-      final profileById = <String, Map<String, dynamic>>{};
-      for (final rowAny in (profileRows as List<dynamic>)) {
-        final row = rowAny as Map<String, dynamic>;
-        final id = row['id']?.toString();
-        if (id == null) continue;
-        profileById[id] = row;
-      }
-
-      return List.generate(top.length, (i) {
-        final uid = top[i].key;
-        final xp = top[i].value;
-        final pr = profileById[uid];
-
-        final fullName = (pr?['full_name'] as String?)?.trim();
-        final username = (pr?['username'] as String?)?.trim();
-
+        final username = (row['username'] as String?)?.trim();
+        final fullName = (row['full_name'] as String?)?.trim();
         return {
-          'rank': i + 1,
-          'user_id': uid,
+          'rank': row['rank'] ?? 0,
+          'user_id': row['user_id'],
           'name': (fullName != null && fullName.isNotEmpty)
               ? fullName
-              : (username ?? uid),
+              : (username ?? row['user_id']),
           'handle': (username != null && username.isNotEmpty)
               ? (username.startsWith('@') ? username : '@$username')
               : '@user',
-          'xp': xp,
+          'xp': row['xp'] ?? 0,
           'isCurrentUser': false,
           'trendingUp': true,
         };
-      });
+      }).toList();
     } catch (e, st) {
       debugPrint('fetchLeaderboardFromProgress error: $e\n$st');
       return [];
@@ -496,13 +552,16 @@ class LearningRepository {
     final ytAsLessons = results[1];
 
     final combined = [...lessons, ...ytAsLessons];
-    combined.sort((a, b) {
-      final aDate = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bDate = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return bDate.compareTo(aDate);
-    });
+    combined.shuffle();
 
-    return combined.take(20).toList();
+    final fresh = combined.where((lesson) => !_shownFeedIds.contains(lesson.id)).toList();
+    final page = fresh.isNotEmpty ? fresh : combined;
+
+    for (final lesson in page.take(20)) {
+      _shownFeedIds.add(lesson.id);
+    }
+
+    return page.take(20).toList();
   }
 
   /// Fetches approved, published lessons from `public.lessons`.

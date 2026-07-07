@@ -137,14 +137,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Scaffold(
-
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: AppColors.backgroundFor(brightness),
       appBar: AppBar(
-        backgroundColor: AppColors.backgroundDark,
+        backgroundColor: AppColors.backgroundFor(brightness),
         elevation: 0,
         title: const Text('Edit Profile'),
-        foregroundColor: AppColors.textPrimaryDark,
+        foregroundColor: AppColors.textPrimaryFor(brightness),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -161,8 +161,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Center(
                       child: CircleAvatar(
                         radius: 46,
-                        backgroundColor: AppColors.surfaceDark,
-                        child: const Icon(Icons.person_outline_rounded, size: 38),
+                        backgroundColor: AppColors.surfaceFor(brightness),
+                        child: Icon(
+                          Icons.person_outline_rounded,
+                          size: 38,
+                          color: AppColors.textSecondaryFor(brightness),
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingXxl),
@@ -173,7 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       decoration: InputDecoration(
                         labelText: 'Full name',
                         filled: true,
-                        fillColor: AppColors.surfaceDark,
+                        fillColor: AppColors.surfaceFor(brightness),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
                           borderSide: BorderSide.none,
@@ -193,7 +197,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       decoration: InputDecoration(
                         labelText: 'Email',
                         filled: true,
-                        fillColor: AppColors.surfaceDark,
+                        fillColor: AppColors.surfaceFor(brightness),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
                           borderSide: BorderSide.none,
@@ -213,10 +217,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     Container(
                       padding: const EdgeInsets.all(AppDimensions.spacingLg),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceDark,
+                        color: AppColors.surfaceFor(brightness),
                         borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
                         border: Border.all(
-                          color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
+                          color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
                         ),
                       ),
                       child: Column(
@@ -227,7 +231,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -237,7 +240,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             decoration: InputDecoration(
                               labelText: 'Current password',
                               filled: true,
-                              fillColor: AppColors.backgroundDark,
+                              fillColor: AppColors.backgroundFor(brightness),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
                                 borderSide: BorderSide.none,
@@ -251,7 +254,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             decoration: InputDecoration(
                               labelText: 'New password',
                               filled: true,
-                              fillColor: AppColors.backgroundDark,
+                              fillColor: AppColors.backgroundFor(brightness),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
                                 borderSide: BorderSide.none,
@@ -267,11 +270,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             },
                           ),
                           const SizedBox(height: 10),
-                          const Text(
+                          Text(
                             'Password will update only if your current password is correct.',
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.textSecondaryDark,
+                              color: AppColors.textSecondaryFor(brightness),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -286,7 +289,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: ElevatedButton(
                         onPressed: _loadingSave ? null : _submit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryDark,
+                          backgroundColor: AppColors.primaryFor(brightness),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(AppDimensions.radiusFull),

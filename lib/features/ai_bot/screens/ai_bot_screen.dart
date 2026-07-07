@@ -172,11 +172,15 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final messages = ref.watch(chatMessagesProvider);
     final isGenerating = ref.watch(isNovaGeneratingProvider);
 
+
+
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
+      backgroundColor: AppColors.backgroundFor(brightness),
+
       body: SafeArea(
         child: Column(
           children: [
@@ -231,6 +235,7 @@ class _NovaHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimensions.spacingLg,
@@ -247,10 +252,10 @@ class _NovaHeader extends StatelessWidget {
             children: [
               Text(
                 'Nova',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimaryDark,
+                  color: AppColors.textPrimaryFor(Theme.of(context).brightness),
                   letterSpacing: -0.3,
                 ),
               ),
@@ -296,7 +301,7 @@ class _NovaHeader extends StatelessWidget {
             icon: Icons.more_horiz_rounded,
             onTap: () {},
             size: 38,
-            iconColor: AppColors.textSecondaryDark,
+iconColor: AppColors.textSecondaryFor(Theme.of(context).brightness),
           ),
         ],
       ),
@@ -398,6 +403,7 @@ class _ChatMessageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final isUser = message.sender == MessageSender.user;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
@@ -411,7 +417,7 @@ class _ChatMessageWidget extends StatelessWidget {
           padding: const EdgeInsets.all(AppDimensions.spacingMd + 2),
           decoration: BoxDecoration(
             gradient: isUser ? AppColors.aiGradient : null,
-            color: isUser ? null : AppColors.surfaceDark,
+            color: isUser ? null : AppColors.surfaceFor(brightness),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(AppDimensions.radiusLg),
               topRight: const Radius.circular(AppDimensions.radiusLg),
@@ -425,7 +431,7 @@ class _ChatMessageWidget extends StatelessWidget {
             border: isUser
                 ? null
                 : Border.all(
-                    color: AppColors.textSecondaryDark
+                    color: AppColors.textSecondaryFor(brightness)
                         .withValues(alpha: 0.1),
                   ),
           ),
@@ -443,7 +449,7 @@ class _ChatMessageWidget extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                   color: isUser
                       ? Colors.white.withValues(alpha: 0.6)
-                      : AppColors.textSecondaryDark
+                      : AppColors.textSecondaryFor(brightness)
                           .withValues(alpha: 0.5),
                 ),
               ),
@@ -480,16 +486,21 @@ class _RichMessageContent extends StatelessWidget {
     if (hasBullets) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: _buildBulletList(lines, isUser),
+        children: _buildBulletList(context, lines, isUser),
       );
     }
     if (text.contains('A)') && text.contains('B)')) {
-      return _buildQuizContent(lines, isUser);
+      return _buildQuizContent(context, lines, isUser);
     }
-    return _buildFormattedText(text, user: isUser);
+    return _buildFormattedText(context, text, user: isUser);
   }
 
-  List<Widget> _buildBulletList(List<String> lines, bool user) {
+  List<Widget> _buildBulletList(
+    BuildContext context,
+    List<String> lines,
+    bool user,
+  ) {
+    final brightness = Theme.of(context).brightness;
     final widgets = <Widget>[];
     for (final line in lines) {
       final trimmed = line.trimLeft();
@@ -513,11 +524,12 @@ class _RichMessageContent extends StatelessWidget {
               ),
               Expanded(
                 child: _buildFormattedText(
+                  context,
                   bulletText,
                   user: user,
                   defaultColor: user
                       ? Colors.white.withValues(alpha: 0.9)
-                      : AppColors.textPrimaryDark,
+                      : AppColors.textPrimaryFor(brightness),
                 ),
               ),
             ],
@@ -531,8 +543,7 @@ class _RichMessageContent extends StatelessWidget {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,
-              color:
-                  user ? Colors.white : AppColors.textPrimaryDark,
+              color: user ? Colors.white : AppColors.textPrimaryFor(brightness),
             ),
           ),
         ));
@@ -540,11 +551,12 @@ class _RichMessageContent extends StatelessWidget {
         widgets.add(Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: _buildFormattedText(
+            context,
             trimmed,
             user: user,
             defaultColor: user
                 ? Colors.white.withValues(alpha: 0.9)
-                : AppColors.textPrimaryDark,
+                : AppColors.textPrimaryFor(brightness),
           ),
         ));
       }
@@ -552,12 +564,13 @@ class _RichMessageContent extends StatelessWidget {
     return widgets;
   }
 
-  Widget _buildQuizContent(List<String> lines, bool user) {
+  Widget _buildQuizContent(BuildContext context, List<String> lines, bool user) {
+    final brightness = Theme.of(context).brightness;
     final color =
-        user ? Colors.white : AppColors.textPrimaryDark;
+        user ? Colors.white : AppColors.textPrimaryFor(brightness);
     final muted = user
         ? Colors.white.withValues(alpha: 0.7)
-        : AppColors.textSecondaryDark;
+        : AppColors.textSecondaryFor(brightness);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: lines.map((line) {
@@ -599,12 +612,14 @@ class _RichMessageContent extends StatelessWidget {
   }
 
   Widget _buildFormattedText(
+    BuildContext context,
     String text, {
     required bool user,
     Color? defaultColor,
   }) {
+    final brightness = Theme.of(context).brightness;
     final color = defaultColor ??
-        (user ? Colors.white : AppColors.textPrimaryDark);
+        (user ? Colors.white : AppColors.textPrimaryFor(brightness));
     final regex = RegExp(r'\*\*(.*?)\*\*');
     final matches = regex.allMatches(text);
     if (matches.isEmpty) {
@@ -633,7 +648,7 @@ class _RichMessageContent extends StatelessWidget {
           fontSize: 15,
           color: user
               ? Colors.white
-              : AppColors.textPrimaryDark,
+              : AppColors.textPrimaryFor(brightness),
           fontWeight: FontWeight.w800,
           height: 1.5,
         ),
@@ -676,6 +691,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
   }
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
@@ -686,7 +702,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
             vertical: 14,
           ),
           decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
+            color: AppColors.surfaceFor(brightness),
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(AppDimensions.radiusLg),
               topRight: Radius.circular(AppDimensions.radiusLg),
@@ -694,7 +710,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
               bottomLeft: Radius.circular(AppDimensions.radiusXs),
             ),
             border: Border.all(
-              color: AppColors.textSecondaryDark
+              color: AppColors.textSecondaryFor(brightness)
                   .withValues(alpha: 0.1),
             ),
           ),
@@ -740,12 +756,14 @@ class _SuggestionChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final suggestions = [
       _ChipData(Icons.explore_outlined, 'Explain this topic'),
       _ChipData(Icons.quiz_outlined, 'Give me a quiz'),
       _ChipData(Icons.summarize_outlined, 'Summarize lesson'),
       _ChipData(Icons.auto_stories_outlined, 'Create flashcards'),
     ];
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppDimensions.spacingLg,
@@ -756,8 +774,8 @@ class _SuggestionChips extends StatelessWidget {
         child: Row(
           children: suggestions.map((chip) {
             return Padding(
-              padding: const EdgeInsets.only(
-                  right: AppDimensions.spacingSm),
+              padding:
+                  const EdgeInsets.only(right: AppDimensions.spacingSm),
               child: GestureDetector(
                 onTap: () => onTap(chip.label),
                 child: Container(
@@ -766,11 +784,12 @@ class _SuggestionChips extends StatelessWidget {
                     vertical: AppDimensions.spacingXs + 2,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceDark,
+                    color: AppColors.surfaceFor(brightness),
                     borderRadius: BorderRadius.circular(
-                        AppDimensions.radiusFull),
+                      AppDimensions.radiusFull,
+                    ),
                     border: Border.all(
-                      color: AppColors.textSecondaryDark
+                      color: AppColors.textSecondaryFor(brightness)
                           .withValues(alpha: 0.12),
                     ),
                   ),
@@ -785,10 +804,10 @@ class _SuggestionChips extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         chip.label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimaryDark,
+                          color: AppColors.textPrimaryFor(brightness),
                         ),
                       ),
                     ],
@@ -802,6 +821,7 @@ class _SuggestionChips extends StatelessWidget {
     );
   }
 }
+
 
 class _ChipData {
   final IconData icon;
@@ -825,6 +845,7 @@ class _NovaInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Container(
       padding: EdgeInsets.fromLTRB(
         AppDimensions.spacingMd,
@@ -833,7 +854,7 @@ class _NovaInputBar extends StatelessWidget {
         MediaQuery.of(context).padding.bottom + AppDimensions.spacingSm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.backgroundDark,
+        color: AppColors.backgroundFor(brightness),
         border: Border(
           top: BorderSide(
             color: Colors.black.withValues(alpha: 0.25),
@@ -853,25 +874,24 @@ class _NovaInputBar extends StatelessWidget {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surfaceDark,
-                borderRadius: BorderRadius.circular(
-                    AppDimensions.radiusMd),
+                color: AppColors.surfaceFor(brightness),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
                 border: Border.all(
-                  color: AppColors.textSecondaryDark
+                  color: AppColors.textSecondaryFor(brightness)
                       .withValues(alpha: 0.1),
                 ),
               ),
               child: TextField(
                 controller: controller,
                 focusNode: focusNode,
-                style: const TextStyle(
-                  color: AppColors.textPrimaryDark,
+                style: TextStyle(
+                  color: AppColors.textPrimaryFor(brightness),
                   fontSize: 15,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Ask Nova anything...',
                   hintStyle: TextStyle(
-                    color: AppColors.textSecondaryDark
+                    color: AppColors.textSecondaryFor(brightness)
                         .withValues(alpha: 0.5),
                     fontSize: 15,
                   ),
@@ -896,16 +916,16 @@ class _NovaInputBar extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.surfaceDark,
+                color: AppColors.surfaceFor(brightness),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppColors.textSecondaryDark
+                  color: AppColors.textSecondaryFor(brightness)
                       .withValues(alpha: 0.12),
                 ),
               ),
               child: Icon(
                 Icons.mic_outlined,
-                color: AppColors.textSecondaryDark,
+                color: AppColors.textSecondaryFor(brightness),
                 size: 20,
               ),
             ),
@@ -925,9 +945,9 @@ class _NovaInputBar extends StatelessWidget {
                 gradient: isGenerating
                     ? LinearGradient(
                         colors: [
-                          AppColors.textSecondaryDark
+                          AppColors.textSecondaryFor(brightness)
                               .withValues(alpha: 0.3),
-                          AppColors.textSecondaryDark
+                          AppColors.textSecondaryFor(brightness)
                               .withValues(alpha: 0.3),
                         ],
                       )

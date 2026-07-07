@@ -611,7 +611,7 @@ class LearningRepository {
     try {
       final completedRows = await _supabase
           .from('user_progress')
-          .select('score,last_accessed,is_completed')
+          .select('lesson_id,score,last_accessed,is_completed')
           .eq('user_id', userUuid)
           .eq('is_completed', true);
 
@@ -619,7 +619,14 @@ class LearningRepository {
           .map((e) => e as Map<String, dynamic>)
           .toList();
 
-      final lessonsCount = completed.length;
+      // Keep Profile "Lessons" count consistent with the "My Learning" section.
+      // "My Learning" dedupes by `lesson_id`, so lessonsCount must also be unique.
+      final completedLessonIds = completed
+          .map((row) => row['lesson_id']?.toString())
+          .whereType<String>()
+          .toSet();
+
+      final lessonsCount = completedLessonIds.length;
       final totalXp = completed.fold<int>(0, (sum, row) {
         final score = row['score'];
         if (score == null) return sum;

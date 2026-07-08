@@ -7,7 +7,8 @@ import '../../../core/constants/constants.dart';
 
 import '../../../core/services/session_manager.dart';
 import '../../../features/feed/controllers/feed_providers.dart';
-
+import '../../quiz/screens/quiz_play_screen.dart';
+import '../../quiz/screens/quiz_lesson_picker_sheet.dart';
 
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -643,14 +644,36 @@ final userAsync = ref.read(sessionUserProvider);
                               ),
                               const SizedBox(width: 10),
                               InkWell(
-                                onTap: () {
-                                  // Intentionally unlinked for now.
+                                onTap: () async {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (ctx) {
+                                      return FractionallySizedBox(
+                                        heightFactor: 0.7,
+                                        child: QuizLessonPickerSheet(
+                                          onPicked: (lesson) {
+                                            Navigator.of(ctx).pop();
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => QuizPlayScreen(
+                                                  lesson: lesson,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      );
+                                    },
+                                  );
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 10,
                                   ),
+
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF5B5FEF),
                                     borderRadius: BorderRadius.circular(999),

@@ -9,6 +9,7 @@ import '../../../core/widgets/glass_widgets.dart';
 import '../../auth/screens/onboarding_screen.dart';
 import '../../learning/models/lesson_model.dart';
 import '../../learning/repositories/learning_repository.dart';
+import '../../learning/repositories/xp_calculation.dart';
 import '../../learning/services/saved_videos_service.dart';
 import '../../lessons/screens/lesson_detail_screen.dart';
 
@@ -46,6 +47,7 @@ class LeaderboardEntry {
   final String name;
   final String handle;
   final int xp;
+  final int level;
   final bool isCurrentUser;
   final bool trendingUp;
 
@@ -54,6 +56,7 @@ class LeaderboardEntry {
     required this.name,
     required this.handle,
     required this.xp,
+    required this.level,
     this.isCurrentUser = false,
     this.trendingUp = true,
   });
@@ -502,7 +505,7 @@ class _StatsRow extends StatelessWidget {
           _StatData(Icons.menu_book_rounded, '${lessonsCount}', 'Lessons'),
           _StatData(
             Icons.auto_awesome_rounded,
-            totalXp.toString(),
+            _formatXp(totalXp),
             'XP',
           ),
           _StatData(
@@ -566,6 +569,13 @@ class _StatsRow extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _formatXp(int xp) {
+    if (xp >= 1000) {
+      return '${(xp / 1000).toStringAsFixed(xp % 1000 == 0 ? 0 : 1)}k';
+    }
+    return xp.toString();
   }
 
   Color _statColor(String label) {
@@ -1297,6 +1307,7 @@ class _LeaderboardSection extends StatelessWidget {
                 final handle = (r['handle'] as String?)?.toString() ?? '@user';
                 final xp = (r['xp'] as num?)?.toInt() ?? 0;
                 final uid = (r['user_id'] as String?)?.toString();
+                final level = (r['level'] as int?) ?? XpCalculation.calculateLevel(xp);
 
                 final isCurrentUser = user != null && uid != null && uid == user.id;
 
@@ -1306,6 +1317,7 @@ class _LeaderboardSection extends StatelessWidget {
                     name: name,
                     handle: handle,
                     xp: xp,
+                    level: level,
                     isCurrentUser: isCurrentUser,
                     trendingUp: true,
                   ),
@@ -1536,15 +1548,28 @@ class _LeaderboardRow extends StatelessWidget {
           ),
 
           // XP
-          Text(
-            '${entry.xp} XP',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: entry.isCurrentUser
-                  ? AppColors.primaryFor(brightness)
-                  : AppColors.textPrimaryFor(brightness),
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${_formatXp(entry.xp)} XP',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: entry.isCurrentUser
+                      ? AppColors.primaryFor(brightness)
+                      : AppColors.textPrimaryFor(brightness),
+                ),
+              ),
+              Text(
+                'Lv ${entry.level}',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondaryFor(brightness),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: AppDimensions.spacingSm),
 
@@ -1575,6 +1600,13 @@ class _LeaderboardRow extends StatelessWidget {
     if (entry.rank == 2) return const Color(0xFFC0C0C0);
     if (entry.rank == 3) return const Color(0xFFCD7F32);
     return AppColors.textSecondaryLight;
+  }
+
+  String _formatXp(int xp) {
+    if (xp >= 1000) {
+      return '${(xp / 1000).toStringAsFixed(xp % 1000 == 0 ? 0 : 1)}k';
+    }
+    return xp.toString();
   }
 
   String _initials(String name) {

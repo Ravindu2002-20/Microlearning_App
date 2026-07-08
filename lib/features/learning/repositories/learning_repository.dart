@@ -9,8 +9,15 @@ import '../models/lesson_model.dart';
 import '../models/lesson_comment_model.dart';
 import '../models/video_model.dart';
 import '../../../core/services/context_engine_service.dart';
+import 'xp_calculation.dart';
 
 const _kLessonVideoBucket = 'lesson_videos';
+
+class _LeaderboardUserStats {
+  final Set<String> watchedLessonIds = <String>{};
+  final Set<DateTime> lastAccessedDates = <DateTime>{};
+  int correctAnswers = 0;
+}
 
 class VideoUploadResult {
   final String? path;
@@ -630,6 +637,11 @@ class LearningRepository {
           .eq('user_id', userUuid)
           .eq('is_completed', true);
 
+      final quizRows = await _supabase
+          .from('quiz_attempts')
+          .select('score, completed_at')
+          .eq('user_id', userUuid);
+
       final completed = (completedRows as List<dynamic>)
           .map((e) => e as Map<String, dynamic>)
           .toList();
@@ -642,8 +654,9 @@ class LearningRepository {
           .toSet();
 
       final lessonsCount = completedLessonIds.length;
-      final totalXp = completed.fold<int>(0, (sum, row) {
-        final score = row['score'];
+      final watchedVideoCount = completedLessonIds.length;
+      final correctAnswerCount = (quizRows as List<dynamic>).fold<int>(0, (sum, row) {
+        final score = (row as Map<String, dynamic>)['score'];
         if (score == null) return sum;
         return sum + (score as num).toInt();
       });
@@ -673,6 +686,12 @@ class LearningRepository {
         }
       }
 
+      final totalXp = XpCalculation.calculateTotalXp(
+        watchedVideoCount: watchedVideoCount,
+        correctAnswerCount: correctAnswerCount,
+        streak: streak,
+      );
+
       final rankRows = await _supabase.rpc('get_user_rank', params: {
         'target_user_id': userUuid,
       });
@@ -685,6 +704,8 @@ class LearningRepository {
         'totalXp': totalXp,
         'streak': streak,
         'rank': rank,
+        'level': XpCalculation.calculateLevel(totalXp),
+        'xpToNextLevel': XpCalculation.xpToNextLevel(totalXp),
       };
     } catch (e, st) {
       debugPrint('fetchUserStatsFromProgress error: $e\n$st');
@@ -693,6 +714,8 @@ class LearningRepository {
         'totalXp': 0,
         'streak': 0,
         'rank': 0,
+        'level': 1,
+        'xpToNextLevel': XpCalculation.xpPerLevel,
       };
     }
   }
@@ -822,40 +845,127 @@ class LearningRepository {
     }
   }
 
-  /// Leaderboard based on total XP from `user_progress.score` (completed only).
-  /// - weekly=true: only last 7 days from last_accessed
+  /// Leaderboard based on the same XP rules used in the profile/home cards.
   Future<List<Map<String, dynamic>>> fetchLeaderboardFromProgress({
     required bool weekly,
     int limit = 10,
   }) async {
     try {
-      final rows = await _supabase.rpc('get_leaderboard', params: {
-        'weekly': weekly,
-        'limit_count': limit,
-      });
+      final progressRows = await _supabase
+          .from('user_progress')
+          .select('user_id, lesson_id, last_accessed, is_completed')
+          .eq('is_completed', true);
 
-      return (rows as List<dynamic>).map((rowAny) {
+      final quizRows = await _supabase.from('quiz_attempts').select('user_id, score, completed_at');
+      final profilesRows = await _supabase.from('profiles').select('id, full_name, username');
+
+      final profileById = <String, Map<String, dynamic>>{};
+      for (final rowAny in (profilesRows as List<dynamic>)) {
         final row = rowAny as Map<String, dynamic>;
-        final username = (row['username'] as String?)?.trim();
-        final fullName = (row['full_name'] as String?)?.trim();
-        return {
-          'rank': row['rank'] ?? 0,
-          'user_id': row['user_id'],
+        final id = row['id']?.toString();
+        if (id == null) continue;
+        profileById[id] = row;
+      }
+
+      final userStats = <String, _LeaderboardUserStats>{};
+      final cutoff = weekly ? DateTime.now().subtract(const Duration(days: 7)) : null;
+
+      for (final rowAny in (progressRows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final userId = row['user_id']?.toString();
+        final lastAccessed = row['last_accessed']?.toString();
+        if (userId == null || userId.isEmpty) continue;
+
+        final parsedDate = lastAccessed == null
+            ? null
+            : DateTime.tryParse(lastAccessed);
+        if (weekly && parsedDate != null && parsedDate.isBefore(cutoff!)) continue;
+
+        final stats = userStats.putIfAbsent(userId, _LeaderboardUserStats.new);
+        final lessonId = row['lesson_id']?.toString();
+        if (lessonId != null && lessonId.isNotEmpty) {
+          stats.watchedLessonIds.add(lessonId);
+        }
+        if (parsedDate != null) {
+          stats.lastAccessedDates.add(DateTime(parsedDate.year, parsedDate.month, parsedDate.day));
+        }
+      }
+
+      for (final rowAny in (quizRows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final userId = row['user_id']?.toString();
+        final completedAt = row['completed_at']?.toString();
+        final score = row['score'];
+        if (userId == null || userId.isEmpty || score == null) continue;
+
+        final parsedDate = completedAt == null ? null : DateTime.tryParse(completedAt);
+        if (weekly && parsedDate != null && parsedDate.isBefore(cutoff!)) continue;
+
+        final stats = userStats.putIfAbsent(userId, _LeaderboardUserStats.new);
+        stats.correctAnswers += (score as num).toInt();
+      }
+
+      final leaderboard = <Map<String, dynamic>>[];
+      for (final entry in userStats.entries) {
+        final userId = entry.key;
+        final stats = entry.value;
+        final streak = _calculateStreak(stats.lastAccessedDates);
+        final xp = XpCalculation.calculateTotalXp(
+          watchedVideoCount: stats.watchedLessonIds.whereType<String>().where((id) => id.isNotEmpty).length,
+          correctAnswerCount: stats.correctAnswers,
+          streak: streak,
+        );
+        final profile = profileById[userId];
+        final username = (profile?['username'] as String?)?.trim();
+        final fullName = (profile?['full_name'] as String?)?.trim();
+        leaderboard.add({
+          'user_id': userId,
           'name': (fullName != null && fullName.isNotEmpty)
               ? fullName
-              : (username ?? row['user_id']),
+              : (username ?? userId),
           'handle': (username != null && username.isNotEmpty)
               ? (username.startsWith('@') ? username : '@$username')
               : '@user',
-          'xp': row['xp'] ?? 0,
-          'isCurrentUser': false,
-          'trendingUp': true,
-        };
-      }).toList();
+          'xp': xp,
+          'level': XpCalculation.calculateLevel(xp),
+          'xpToNextLevel': XpCalculation.xpToNextLevel(xp),
+        });
+      }
+
+      leaderboard.sort((a, b) {
+        final xpA = (a['xp'] as num?)?.toInt() ?? 0;
+        final xpB = (b['xp'] as num?)?.toInt() ?? 0;
+        if (xpA != xpB) return xpB.compareTo(xpA);
+        return ((a['name'] as String?) ?? '').compareTo((b['name'] as String?) ?? '');
+      });
+
+      return leaderboard
+          .take(limit)
+          .toList()
+          .asMap()
+          .entries
+          .map((entry) {
+            final item = entry.value;
+            item['rank'] = entry.key + 1;
+            return item;
+          })
+          .toList();
     } catch (e, st) {
       debugPrint('fetchLeaderboardFromProgress error: $e\n$st');
       return [];
     }
+  }
+
+  int _calculateStreak(Set<DateTime> dates) {
+    if (dates.isEmpty) return 0;
+    final sorted = dates.toList()..sort((a, b) => b.compareTo(a));
+    int streak = 0;
+    var cursor = sorted.first;
+    while (sorted.any((d) => d.isAtSameMomentAs(cursor))) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

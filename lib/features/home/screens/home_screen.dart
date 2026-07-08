@@ -9,7 +9,15 @@ import '../../../core/services/session_manager.dart';
 import '../../../features/feed/controllers/feed_providers.dart';
 import '../../quiz/screens/quiz_play_screen.dart';
 import '../../quiz/screens/quiz_lesson_picker_sheet.dart';
+import '../services/video_recommendation_service.dart';
+import '../../learning/models/lesson_model.dart';
+import '../../learning/repositories/xp_calculation.dart';
+import '../../learning/repositories/learning_repository.dart';
 
+final videoRecommendationAsyncProvider = FutureProvider.family<List<LessonModel>, String>((ref, userId) async {
+  final svc = ref.read(videoRecommendationServiceProvider);
+  return svc.recommendForUser(userUuid: userId, topN: 4);
+});
 
 class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback onOpenLessons;
@@ -580,26 +588,66 @@ final userAsync = ref.read(sessionUserProvider);
                           onTapAction: _openLessons,
                         ),
                         const SizedBox(height: 14),
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _recommendedLessons.length,
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 1.05,
-                          ),
-                          itemBuilder: (context, index) {
-                            final item = _recommendedLessons[index];
-                            return _RecommendationCard(
-                              item: item,
-                              onTap: _openLessons,
-                              onMore: () => _showRecommendationSheet(item.title),
-                            );
-                          },
-                        ),
+                        Consumer(builder: (context, ref, _) {
+                          final streamUser = ref.watch(sessionUserProvider).maybeWhen(
+                                data: (u) => u,
+                                orElse: () => null,
+                              );
+                          final user = streamUser ?? Supabase.instance.client.auth.currentUser;
+
+                          if (user == null) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final recAsync = ref.watch(videoRecommendationAsyncProvider(user.id));
+
+                          return recAsync.when(
+                            loading: () => GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: 4,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 1.05,
+                              ),
+                              itemBuilder: (_, __) {
+                                return const _RecommendationSkeleton();
+                              },
+                            ),
+                            error: (_, __) => const SizedBox.shrink(),
+                            data: (items) {
+                              if (items.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final visibleItems = items.take(4).toList();
+
+                              return GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: visibleItems.length,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 0.72,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final item = visibleItems[index];
+                                  return _RecommendationCard(
+                                    item: item,
+                                    onTap: _openLessons,
+                                    onMore: () => _showRecommendationSheet(item.title),
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        }),
                       ],
                     ),
                   ),
@@ -967,7 +1015,8 @@ class _RecentSearchRow extends StatelessWidget {
 
 
 class _RecommendationCard extends StatelessWidget {
-  final _RecommendedLesson item;
+  final LessonModel item;
+
   final VoidCallback onTap;
   final VoidCallback onMore;
 
@@ -979,59 +1028,95 @@ class _RecommendationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              item.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(color: item.fallbackColor),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.7)
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(
+                      item.thumbnailUrl ?? '',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFF5B5FEF),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.play_circle_fill_rounded,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: GestureDetector(
+                        onTap: onMore,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.more_vert_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: GestureDetector(
-                onTap: onMore,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  child: const Icon(
-                    Icons.more_vert_rounded,
-                    color: Colors.white,
-                    size: 20,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimaryDark : Colors.black,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      height: 1.2,
+                    ),
                   ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: Text(
-                item.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                  height: 1.15,
-                ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.category.isNotEmpty ? item.category : 'Video',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF5B5FEF),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1133,15 +1218,60 @@ class _ChallengeCard extends StatelessWidget {
   }
 }
 
-class _XpProgressCard extends StatelessWidget {
+class _XpProgressCard extends StatefulWidget {
   const _XpProgressCard();
+
+  @override
+  State<_XpProgressCard> createState() => _XpProgressCardState();
+}
+
+class _XpProgressCardState extends State<_XpProgressCard> {
+  Future<Map<String, dynamic>>? _statsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _statsFuture = _loadStats();
+  }
+
+  Future<Map<String, dynamic>> _loadStats() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return {
+        'totalXp': 0,
+        'streak': 0,
+        'level': 1,
+        'xpToNextLevel': XpCalculation.xpPerLevel,
+      };
+    }
+
+    return LearningRepository(Supabase.instance.client).fetchUserStatsFromProgress(
+      userUuid: user.id,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryTextColor = isDark ? AppColors.textPrimaryDark : Colors.black;
 
-    return Container(
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _statsFuture,
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? const <String, dynamic>{};
+        final totalXp = (data['totalXp'] as int?) ?? 0;
+        final streak = (data['streak'] as int?) ?? 0;
+        final level = (data['level'] as int?) ?? XpCalculation.calculateLevel(totalXp);
+        final xpToNextLevel = (data['xpToNextLevel'] as int?) ?? XpCalculation.xpToNextLevel(totalXp);
+        final fraction = xpToNextLevel <= 0
+            ? 1.0
+            : (totalXp % XpCalculation.xpPerLevel) / XpCalculation.xpPerLevel;
+
+        final nextLevelText = xpToNextLevel <= 0
+            ? 'Level up complete'
+            : '$xpToNextLevel XP to Level ${level + 1}';
+
+        return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : Colors.white,
@@ -1169,11 +1299,11 @@ class _XpProgressCard extends StatelessWidget {
                       color: Color(0xFF5B5FEF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
+                          const Text(
                             'Lvl',
                             style: TextStyle(
                               color: Colors.white70,
@@ -1182,8 +1312,8 @@ class _XpProgressCard extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '7',
-                            style: TextStyle(
+                            '$level',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
@@ -1210,7 +1340,7 @@ class _XpProgressCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '3,450',
+                      totalXp.toString(),
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w800,
@@ -1218,11 +1348,11 @@ class _XpProgressCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const _GradientProgressBar(fraction: 0.7),
+                    _GradientProgressBar(fraction: fraction.clamp(0.0, 1.0)),
                     const SizedBox(height: 6),
-                    const Text(
-                      '680 XP to Level 8',
-                      style: TextStyle(
+                    Text(
+                      nextLevelText,
+                      style: const TextStyle(
                         color: Color(0xFF5B5FEF),
                         fontWeight: FontWeight.w700,
                       ),
@@ -1263,10 +1393,12 @@ class _XpProgressCard extends StatelessWidget {
                 size: 18,
               ),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '7-day streak — Keep it going!',
-                  style: TextStyle(
+                  streak >= 7
+                      ? '7-day streak — Bonus unlocked!'
+                      : '7-day streak — Keep it going!',
+                  style: const TextStyle(
                     color: Color(0xFFFF7043),
                     fontWeight: FontWeight.w700,
                   ),
@@ -1279,9 +1411,9 @@ class _XpProgressCard extends StatelessWidget {
                   color: const Color(0xFFFF7043),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
-                  '+100 XP Bonus',
-                  style: TextStyle(
+                child: Text(
+                  streak >= 7 ? '+${XpCalculation.streakBonusXp} XP Bonus' : '$streak day streak',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 12,
@@ -1292,6 +1424,8 @@ class _XpProgressCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+      },
     );
   }
 }
@@ -1421,40 +1555,21 @@ class _InitialAvatar extends StatelessWidget {
   }
 }
 
-class _RecommendedLesson {
-  final String title;
-  final String imageUrl;
-  final Color fallbackColor;
+class _RecommendationSkeleton extends StatelessWidget {
+  const _RecommendationSkeleton();
 
-  const _RecommendedLesson({
-    required this.title,
-    required this.imageUrl,
-    required this.fallbackColor,
-  });
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.white10
+            : Colors.black12,
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
+  }
 }
-
-const _recommendedLessons = [
-  _RecommendedLesson(
-    title: 'Robotics & AI Basics',
-    imageUrl: 'https://picsum.photos/seed/robotics-ai/600/600',
-    fallbackColor: Color(0xFF5B5FEF),
-  ),
-  _RecommendedLesson(
-    title: 'Embedded Systems Explained',
-    imageUrl: 'https://picsum.photos/seed/embedded-systems/600/600',
-    fallbackColor: Color(0xFF2ECC8E),
-  ),
-  _RecommendedLesson(
-    title: 'Introduction to UX Design',
-    imageUrl: 'https://picsum.photos/seed/ux-design/600/600',
-    fallbackColor: Color(0xFFFF7043),
-  ),
-  _RecommendedLesson(
-    title: 'Biotechnology Fundamentals',
-    imageUrl: 'https://picsum.photos/seed/biotechnology/600/600',
-    fallbackColor: Color(0xFF5B5FEF),
-  ),
-];
 
 class _ChallengeData {
   final String title;

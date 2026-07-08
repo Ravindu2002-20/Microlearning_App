@@ -424,6 +424,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         return;
       }
 
+      ref.invalidate(isAdminProvider); // ensure fresh admin check after login/logout
       final isAdmin = await ref.read(isAdminProvider.future);
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(

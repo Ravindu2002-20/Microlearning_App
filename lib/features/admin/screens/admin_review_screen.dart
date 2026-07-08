@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+
 import '../../../core/constants/constants.dart';
 import '../../learning/models/lesson_model.dart';
 import '../../learning/repositories/learning_repository.dart';
+import 'admin_review_video_preview.dart';
+
+
 
 final _pendingLessonsProvider =
     FutureProvider.autoDispose<List<LessonModel>>((ref) async {
@@ -397,7 +401,9 @@ class _ReviewCardState extends State<_ReviewCard> {
                       color: AppColors.textSecondaryDark.withValues(alpha: 0.08),
                     ),
                   ),
-                  child: lessonPreview(widget.lesson),
+                  child: AdminVideoPreview(lesson: widget.lesson),
+
+
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -487,27 +493,7 @@ class _ReviewCardState extends State<_ReviewCard> {
     );
   }
 
-  Widget lessonPreview(LessonModel lesson) {
-    if (lesson.thumbnailUrl != null && lesson.thumbnailUrl!.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusSm),
-        child: Image.network(
-          lesson.thumbnailUrl!,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          errorBuilder: (_, __, ___) => const Center(
-            child: Icon(Icons.play_circle_fill_rounded,
-                size: 54, color: AppColors.warning),
-          ),
-        ),
-      );
-    }
-    return const Center(
-      child: Icon(Icons.play_circle_fill_rounded,
-          size: 54, color: AppColors.warning),
-    );
-  }
+
 }
 
 class _Chip extends StatelessWidget {

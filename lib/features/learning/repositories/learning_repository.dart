@@ -231,6 +231,22 @@ class LearningRepository {
     }
   }
 
+  LessonModel _hydrateLessonVideoUrl(Map<String, dynamic> json) {
+    final lesson = LessonModel.fromJson(json);
+    final videoPath = json['video_path']?.toString();
+    if (videoPath == null || videoPath.isEmpty) return lesson;
+    if (videoPath.startsWith('http')) return lesson.copyWith(videoUrl: videoPath);
+
+    final normalizedPath = videoPath.startsWith('$_kLessonVideoBucket/')
+        ? videoPath.substring(_kLessonVideoBucket.length + 1)
+        : videoPath;
+
+    final publicUrl =
+        _supabase.storage.from(_kLessonVideoBucket).getPublicUrl(normalizedPath);
+
+    return lesson.copyWith(videoUrl: publicUrl);
+  }
+
   Future<List<LessonModel>> fetchPendingLessons() async {
     try {
       final response = await _supabase
@@ -238,14 +254,16 @@ class LearningRepository {
           .select()
           .eq('status', 'pending')
           .order('created_at', ascending: false);
+
       return (response as List)
-          .map((json) => LessonModel.fromJson(json))
+          .map((row) => _hydrateLessonVideoUrl(row as Map<String, dynamic>))
           .toList();
     } catch (e) {
       debugPrint('fetchPendingLessons error: $e');
       return [];
     }
   }
+
 
   Future<bool> approveLesson(String lessonId, String adminId) async {
     try {

@@ -101,6 +101,7 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
       return;
     }
 
+    ref.invalidate(isAdminProvider); // ensure fresh admin check after login/logout
     final isAdmin = await ref.read(isAdminProvider.future);
     if (!mounted) return;
 

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-final isAdminProvider = FutureProvider<bool>((ref) async {
+final isAdminProvider = FutureProvider.autoDispose<bool>((ref) async {
   final user = Supabase.instance.client.auth.currentUser;
   final userId = user?.id;
   if (userId == null) {

@@ -115,6 +115,36 @@ class AiChatController
     }
   }
 
+  /// Called every time the AI Bot screen opens. Always presents a blank
+  /// chat — never resumes a previous conversation. The conversation row
+  /// itself is only created lazily inside sendMessage() once the user
+  /// actually sends their first message, so opening the screen and leaving
+  /// without typing anything does not clutter the chat history.
+  Future<void> startFreshSession() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+
+    // Still load the conversation list so the history drawer works,
+    // but don't activate any of them.
+    try {
+      final conversations = await _chatRepository.fetchConversations(
+        userId: user.id,
+      );
+      _conversationListNotifier.setConversations(conversations);
+    } catch (e, st) {
+      debugPrint('startFreshSession: failed to load conversation list: $e');
+    }
+
+    _realtimeChannel?.unsubscribe();
+    _realtimeChannel = null;
+    _currentConversationId = null;
+    _setActiveConversationId(null);
+    state = const AsyncValue.data([]);
+  }
+
   Future<void> resetToNewChat() async {
     // Always start with a brand-new conversation when entering the AI bot.
     final user = Supabase.instance.client.auth.currentUser;
@@ -130,6 +160,7 @@ class AiChatController
     state = const AsyncValue.data([]);
     await startNewConversation(initialTitle: 'New chat');
   }
+
 
   Future<void> loadConversation(
     String conversationId, {
@@ -273,7 +304,7 @@ class AiChatController
             m.sender == ChatSender.user || m.sender == ChatSender.assistant)
         .take(30)
         .map((m) => {
-              'role': m.sender == ChatSender.user ? 'user' : 'model',
+              'role': m.sender == ChatSender.user ? 'user' : 'assistant',
               'text': m.message,
             })
         .toList();
@@ -341,7 +372,11 @@ class AiChatController
     }
 
     if (current.where((m) => m.sender == ChatSender.user).length == 1) {
-      await renameActiveConversation(trimmed);
+      final title = await _generateTopicTitle(
+        userMessage: trimmed,
+        assistantReply: reply,
+      );
+      await renameActiveConversation(title);
     }
   }
 
@@ -351,10 +386,47 @@ class AiChatController
     super.dispose();
   }
 
+  Future<String> _generateTopicTitle({
+    required String userMessage,
+    required String assistantReply,
+  }) async {
+    final prompt = '''
+Summarize the topic of this conversation in 3 to 6 words.
+Rules: no quotes, no punctuation at the end, no prefixes like "Topic:", just the short title itself.
+
+User: $userMessage
+Assistant: $assistantReply
+''';
+
+    try {
+      final raw = await _geminiService.generateReply(
+        prompt: prompt,
+        history: const [],
+      );
+      return _sanitizeTitle(raw, fallback: userMessage);
+    } catch (e) {
+      debugPrint('Title generation failed, falling back to raw message: $e');
+      return _sanitizeTitle(userMessage, fallback: userMessage);
+    }
+  }
+
+  String _sanitizeTitle(String raw, {required String fallback}) {
+    var cleaned = raw
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .replaceAll('\n', ' ')
+        .trim();
+
+    if (cleaned.isEmpty) cleaned = fallback.trim();
+    if (cleaned.length > 60) cleaned = '${cleaned.substring(0, 57)}...';
+    return cleaned.isEmpty ? 'New chat' : cleaned;
+  }
+
   String _buildPrompt({
     required String message,
     Map<String, dynamic>? lessonContext,
   }) {
+
     final lessonBlock = lessonContext == null
         ? ''
         : '''

@@ -488,34 +488,31 @@ class LearningRepository {
     }
   }
 
-  Future<bool> toggleLike({required String lessonId}) async {
+  Future<void> toggleLike({
+    required String lessonId,
+  }) async {
     final user = _supabase.auth.currentUser;
+
     if (user == null) {
       throw Exception('Must be signed in to like');
     }
-    try {
-      final liked = await isLikedByMe(lessonId: lessonId);
-      if (liked) {
-        await _supabase
-            .from('lesson_likes')
-            .delete()
-            .eq('user_id', user.id)
-            .eq('lesson_id', lessonId);
-        return false;
-      }
+
+    final liked = await isLikedByMe(lessonId: lessonId);
+
+    if (liked) {
+      await _supabase
+          .from('lesson_likes')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('lesson_id', lessonId);
+    } else {
       await _supabase.from('lesson_likes').insert({
         'user_id': user.id,
         'lesson_id': lessonId,
       });
-      return true;
-    } catch (e) {
-      final message = e.toString().toLowerCase();
-      if (message.contains('duplicate') || message.contains('unique')) {
-        return true;
-      }
-      rethrow;
     }
   }
+
 
   Future<int> getCommentCount({required String lessonId}) async {
     final counts = await getCommentCountsForLessons([lessonId]);

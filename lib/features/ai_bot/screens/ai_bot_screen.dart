@@ -23,7 +23,7 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(aiChatControllerProvider.notifier).loadInitialConversation();
+      ref.read(aiChatControllerProvider.notifier).startFreshSession();
     });
   }
 
@@ -52,9 +52,7 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
     if (trimmed.isEmpty) return;
     _textCtrl.clear();
     ref.read(aiChatTypingProvider.notifier).state = true;
-    await ref
-        .read(aiChatControllerProvider.notifier)
-        .sendMessage(text: trimmed);
+    await ref.read(aiChatControllerProvider.notifier).sendMessage(text: trimmed);
     ref.read(aiChatTypingProvider.notifier).state = false;
     _scrollToBottom();
   }
@@ -131,9 +129,10 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
     String? errorText,
     VoidCallback? onRetry,
   }) {
-    final displayMessages = messages.isEmpty
-        ? <ChatMessageModel>[_buildWelcomeMessage()]
-        : messages;
+    final displayMessages = <ChatMessageModel>[
+      _buildWelcomeMessage(),
+      ...messages,
+    ];
 
     return Column(
       children: [
@@ -261,12 +260,7 @@ class _NovaHeader extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          GlassButton(
-            icon: Icons.more_horiz_rounded,
-            onTap: () {},
-            size: 38,
-            iconColor: AppColors.textSecondaryFor(Theme.of(context).brightness),
-          ),
+
         ],
       ),
     );
@@ -605,3 +599,4 @@ class _NovaInputBar extends StatelessWidget {
     );
   }
 }
+

@@ -198,33 +198,30 @@ class _MainSwipeFeedScreenState extends ConsumerState<MainSwipeFeedScreen>
 
     final prevLiked = _isLikedByMe[lesson.id] ?? false;
     final prevCount = _likeCounts[lesson.id] ?? 0;
+
+    // Optimistic update
     setState(() {
       _isLikedByMe[lesson.id] = !prevLiked;
-      _likeCounts[lesson.id] =
-          prevLiked ? (prevCount - 1).clamp(0, 1 << 30) : prevCount + 1;
+      _likeCounts[lesson.id] = prevLiked ? prevCount - 1 : prevCount + 1;
     });
 
     try {
-      final serverLiked = await _repo.toggleLike(lessonId: lesson.id);
+      await _repo.toggleLike(lessonId: lesson.id);
+
+      // Success.
+      // Nothing else to do.
+    } catch (e) {
       if (!mounted) return;
-      if (serverLiked != _isLikedByMe[lesson.id]) {
-        setState(() {
-          _isLikedByMe[lesson.id] = prevLiked;
-          _likeCounts[lesson.id] = prevCount;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Couldn't update like, please try again")),
-        );
-      }
-    } catch (_) {
-      if (!mounted) return;
+
       setState(() {
         _isLikedByMe[lesson.id] = prevLiked;
         _likeCounts[lesson.id] = prevCount;
       });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Couldn't update like, please try again")),
+        const SnackBar(
+          content: Text("Couldn't update like"),
+        ),
       );
     }
   }
@@ -509,7 +506,6 @@ class _FeedVideoLayerState extends State<_FeedVideoLayer> {
   void _syncPlaybackWithActiveState() {
     final shouldPlay = widget.isActive;
     _isPlaying = shouldPlay;
-
 
     if (_usingVideo && _controller != null) {
       if (shouldPlay) {
@@ -1317,191 +1313,227 @@ class _CommentsSheetState extends State<_CommentsSheet> {
   @override
   Widget build(BuildContext context) {
     final currentUser = Supabase.instance.client.auth.currentUser;
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Column(
-        children: [
-          Container(
-            margin: const EdgeInsets.only(top: 12, bottom: 8),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const Text(
-            'Comments',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+            const Text(
+              'Comments',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _comments.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No comments yet. Be the first to comment!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white54, fontSize: 14),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        reverse: false,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _comments.length,
-                        itemBuilder: (context, index) {
-                          final comment = _comments[index];
-                          final canDelete =
-                              comment.userId == currentUser?.id || _isAdmin;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 18,
-                                  backgroundImage: comment.authorAvatarUrl !=
-                                          null
-                                      ? NetworkImage(comment.authorAvatarUrl!)
-                                      : null,
-                                  backgroundColor: Colors.white24,
-                                  child: comment.authorAvatarUrl == null
-                                      ? Text(
-                                          (comment.authorName ?? 'U')
-                                              .trim()
-                                              .substring(0, 1)
-                                              .toUpperCase(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.06),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                comment.authorName ?? 'User',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                            Text(
-                                              _timeAgo(comment.createdAt),
-                                              style: const TextStyle(
-                                                color: Colors.white38,
-                                                fontSize: 11,
-                                              ),
-                                            ),
-                                            if (canDelete) ...[
-                                              const SizedBox(width: 8),
-                                              GestureDetector(
-                                                onTap: () =>
-                                                    _deleteComment(comment),
-                                                child: const Icon(
-                                                  Icons.delete_outline_rounded,
-                                                  color: Colors.white54,
-                                                  size: 18,
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          comment.content,
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            height: 1.4,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Add a comment...',
-                      hintStyle: TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: Color(0xFF2A2A2A),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(24)),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    onSubmitted: (_) => _send(),
-                  ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sending ? null : _send,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                    ),
-                    child: _sending
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _comments.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No comments yet. Be the first to comment!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 14,
+                              ),
                             ),
                           )
-                        : const Icon(Icons.send_rounded,
-                            color: Colors.white, size: 20),
-                  ),
-                ),
-              ],
+                        : ListView.builder(
+                            controller: _scrollController,
+                            reverse: false,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _comments.length,
+                            itemBuilder: (context, index) {
+                              final comment = _comments[index];
+                              final canDelete =
+                                  comment.userId == currentUser?.id || _isAdmin;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundImage:
+                                          comment.authorAvatarUrl != null
+                                              ? NetworkImage(
+                                                  comment.authorAvatarUrl!,
+                                                )
+                                              : null,
+                                      backgroundColor: Colors.white24,
+                                      child: comment.authorAvatarUrl == null
+                                          ? Text(
+                                              (comment.authorName ?? 'U')
+                                                  .trim()
+                                                  .substring(0, 1)
+                                                  .toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.06,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    comment.authorName ??
+                                                        'User',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  _timeAgo(comment.createdAt),
+                                                  style: const TextStyle(
+                                                    color: Colors.white38,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                                if (canDelete) ...[
+                                                  const SizedBox(width: 8),
+                                                  GestureDetector(
+                                                    onTap: () => _deleteComment(
+                                                      comment,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons
+                                                          .delete_outline_rounded,
+                                                      color: Colors.white54,
+                                                      size: 18,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              comment.content,
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+              ),
             ),
-          ),
-        ],
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        autofocus: true,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                        cursorColor: Colors.white,
+                        decoration: const InputDecoration(
+                          hintText: 'Add a comment...',
+                          hintStyle: TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: Color(0xFF2A2A2A),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(24)),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        onSubmitted: (_) => _send(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _sending ? null : _send,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          shape: BoxShape.circle,
+                        ),
+                        child: _sending
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

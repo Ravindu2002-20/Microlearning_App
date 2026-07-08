@@ -1,67 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../core/constants/constants.dart';
 import '../../../core/widgets/glass_widgets.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Data Models
-// ─────────────────────────────────────────────────────────────────────────────
-
-enum MessageSender { user, nova }
-
-class ChatMessageModel {
-  final MessageSender sender;
-  final String text;
-  final DateTime timestamp;
-
-  ChatMessageModel({
-    required this.sender,
-    required this.text,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────────────────────
-
-final chatMessagesProvider =
-    StateNotifierProvider<ChatNotifier, List<ChatMessageModel>>((ref) {
-  return ChatNotifier();
-});
-
-final isNovaGeneratingProvider = StateProvider<bool>((ref) => false);
-
-class ChatNotifier extends StateNotifier<List<ChatMessageModel>> {
-  ChatNotifier() : super(_initialMessages);
-
-  static final List<ChatMessageModel> _initialMessages = [
-    ChatMessageModel(
-      sender: MessageSender.nova,
-      text:
-          "Hi! I'm Nova, your AI learning assistant. I can help explain topics, create quizzes, summarize lessons, and make flashcards. What would you like to explore today?",
-    ),
-  ];
-
-  void addMessage(String text) {
-    if (text.trim().isEmpty) return;
-    state = [
-      ...state,
-      ChatMessageModel(sender: MessageSender.user, text: text.trim())
-    ];
-  }
-
-  void addNovaResponse(String text) {
-    state = [
-      ...state,
-      ChatMessageModel(sender: MessageSender.nova, text: text)
-    ];
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AiBotScreen — Nova AI Learning Assistant
-// ─────────────────────────────────────────────────────────────────────────────
+import '../controllers/ai_chat_controller.dart';
+import '../models/chat_message_model.dart';
 
 class AiBotScreen extends ConsumerStatefulWidget {
   const AiBotScreen({super.key});
@@ -74,6 +18,14 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(aiChatControllerProvider.notifier).loadInitialConversation();
+    });
+  }
 
   @override
   void dispose() {
@@ -96,117 +48,67 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
   }
 
   Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
-
-    ref.read(chatMessagesProvider.notifier).addMessage(text);
-    ref.read(isNovaGeneratingProvider.notifier).state = true;
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
     _textCtrl.clear();
+    ref.read(aiChatTypingProvider.notifier).state = true;
+    await ref
+        .read(aiChatControllerProvider.notifier)
+        .sendMessage(text: trimmed);
+    ref.read(aiChatTypingProvider.notifier).state = false;
     _scrollToBottom();
-
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-
-    final lower = text.toLowerCase();
-    String response;
-
-    if (lower.contains('quiz') || lower.contains('test')) {
-      response =
-          "Great idea! Here's a quick quiz question:\n\nWhat does a neural network's activation function do?\n\n"
-          "A) Stores training data\nB) Introduces non-linearity\nC) Reduces overfitting\nD) Normalizes inputs\n\n"
-          "Try answering — I'll check it!";
-    } else if (lower.contains('summarize') || lower.contains('summary')) {
-      response =
-          "Here's a quick summary structure:\n\n"
-          "• **Main Idea**: Identify the core concept\n"
-          "• **Key Points**: List 3-5 supporting details\n"
-          "• **Example**: One concrete application\n"
-          "• **Takeaway**: One sentence to remember\n\n"
-          "Share a lesson and I'll summarize it for you!";
-    } else if (lower.contains('flashcard') || lower.contains('card')) {
-      response =
-          "Flashcards are powerful! Here's a template:\n\n"
-          "**Front**: What is gradient descent?\n"
-          "**Back**: An optimization algorithm that minimizes the loss function by iteratively moving toward the steepest descent.\n\n"
-          "I can generate a full set from any topic. Just say the word!";
-    } else if (lower.contains('hello') || lower.contains('hi') ||
-        lower.contains('hey')) {
-      response =
-          "Hey there! 👋 I'm ready to help you learn. Try asking me to explain a topic, or tap one of the suggestions below!";
-    } else if (lower.contains('explain') || lower.contains('what is') ||
-        lower.contains('how')) {
-      response =
-          "Let me break this down:\n\n"
-          "**Core Concept**: This topic builds on foundational knowledge.\n\n"
-          "**Key Components**:\n"
-          "• First, understand the basic principles\n"
-          "• Then, explore how components interact\n"
-          "• Finally, apply it to real scenarios\n\n"
-          "Would you like a deeper dive with examples?";
-    } else if (lower.contains('network') || lower.contains('neural')) {
-      response =
-          "A neural network consists of:\n\n"
-          "• **Input Layer** — Receives data features\n"
-          "• **Hidden Layer(s)** — Processes through weighted connections\n"
-          "• **Output Layer** — Produces the result\n\n"
-          "Each connection has a weight that adjusts during training through backpropagation.";
-    } else {
-      response =
-          "That's an interesting topic! Here's what I know:\n\n"
-          "**Overview**: This area combines several key concepts worth exploring.\n\n"
-          "**Quick Facts**:\n"
-          "• Start with the fundamentals\n"
-          "• Practice with examples\n"
-          "• Review and reinforce daily\n\n"
-          "Want me to create a quiz or flashcards to help you master it?";
-    }
-
-    ref.read(chatMessagesProvider.notifier).addNovaResponse(response);
-    ref.read(isNovaGeneratingProvider.notifier).state = false;
-    _scrollToBottom();
-  }
-
-  void _sendSuggestion(String text) {
-    _textCtrl.text = text;
-    _sendMessage(text);
   }
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final messages = ref.watch(chatMessagesProvider);
-    final isGenerating = ref.watch(isNovaGeneratingProvider);
-
-
+    final chatState = ref.watch(aiChatControllerProvider);
+    final messages = chatState.valueOrNull ?? const <ChatMessageModel>[];
+    final isGenerating = ref.watch(aiChatTypingProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundFor(brightness),
-
+      drawer: const _ChatHistoryDrawer(),
       body: SafeArea(
         child: Column(
           children: [
-            _NovaHeader(isGenerating: isGenerating),
+            Builder(
+              builder: (innerContext) {
+                return _NovaHeader(
+                  isGenerating: isGenerating,
+                  onOpenMenu: () => Scaffold.of(innerContext).openDrawer(),
+                );
+              },
+            ),
             const SizedBox(height: AppDimensions.spacingSm),
             Expanded(
               child: GestureDetector(
                 onTap: () => _focusNode.unfocus(),
-                child: ListView.builder(
-                  controller: _scrollCtrl,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.spacingLg,
+                child: chatState.when(
+                  loading: () => _buildConversationList(
+                    messages: messages,
+                    isGenerating: isGenerating,
+                    showLoading: true,
                   ),
-                  itemCount: messages.length + (isGenerating ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (isGenerating && index == messages.length) {
-                      return const _TypingIndicator();
-                    }
-                    final msg = messages[index];
-                    return _ChatMessageWidget(message: msg);
+                  error: (err, st) {
+                    return _buildConversationList(
+                      messages: messages,
+                      isGenerating: isGenerating,
+                      errorText:
+                          'Could not load chat history. Tap retry to try again.',
+                      onRetry: () => ref
+                          .read(aiChatControllerProvider.notifier)
+                          .loadInitialConversation(),
+                    );
                   },
+                  data: (_) => _buildConversationList(
+                    messages: messages,
+                    isGenerating: isGenerating,
+                  ),
                 ),
               ),
             ),
-            _SuggestionChips(onTap: _sendSuggestion),
-            // Keep nav-like bottom inset handling consistent (avoid double padding).
+            _SuggestionChips(onTap: _sendMessage),
             SafeArea(
               top: false,
               child: _NovaInputBar(
@@ -221,21 +123,88 @@ class _AiBotScreenState extends ConsumerState<AiBotScreen> {
       ),
     );
   }
+
+  Widget _buildConversationList({
+    required List<ChatMessageModel> messages,
+    required bool isGenerating,
+    bool showLoading = false,
+    String? errorText,
+    VoidCallback? onRetry,
+  }) {
+    final displayMessages = messages.isEmpty
+        ? <ChatMessageModel>[_buildWelcomeMessage()]
+        : messages;
+
+    return Column(
+      children: [
+        if (showLoading)
+          const LinearProgressIndicator(minHeight: 2)
+        else if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimensions.spacingLg,
+              vertical: AppDimensions.spacingXs,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    errorText,
+                    style: TextStyle(
+                      color: AppColors.textSecondaryFor(
+                        Theme.of(context).brightness,
+                      ),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (onRetry != null)
+                  TextButton(
+                    onPressed: onRetry,
+                    child: const Text('Retry'),
+                  ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollCtrl,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimensions.spacingLg,
+            ),
+            itemCount: displayMessages.length + (isGenerating ? 1 : 0),
+            itemBuilder: (context, index) {
+              if (isGenerating && index == displayMessages.length) {
+                return const _TypingIndicator();
+              }
+              return _ChatMessageWidget(message: displayMessages[index]);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  ChatMessageModel _buildWelcomeMessage() {
+    return ChatMessageModel(
+      id: 'welcome-local',
+      userId: Supabase.instance.client.auth.currentUser?.id ?? '',
+      conversationId: ref.read(activeConversationIdProvider) ?? 'local',
+      sender: ChatSender.assistant,
+      message:
+          "Hello! 👋\n\nI'm your AI Learning Assistant.\n\nI can help explain lessons, answer questions, create quizzes, explain code, and assist with your learning.\n\nHow can I help you today?",
+      createdAt: DateTime.now(),
+    );
+  }
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Widgets
-// ═════════════════════════════════════════════════════════════════════════════
-
-// ── Nova Header ────────────────────────────────────────────────────────────
 
 class _NovaHeader extends StatelessWidget {
   final bool isGenerating;
-  const _NovaHeader({required this.isGenerating});
+  final VoidCallback onOpenMenu;
+  const _NovaHeader({required this.isGenerating, required this.onOpenMenu});
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppDimensions.spacingLg,
@@ -245,6 +214,10 @@ class _NovaHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
+          IconButton(
+            onPressed: onOpenMenu,
+            icon: const Icon(Icons.menu_rounded),
+          ),
           _NovaAvatar(isGenerating: isGenerating),
           const SizedBox(width: AppDimensions.spacingMd),
           Column(
@@ -270,15 +243,6 @@ class _NovaHeader extends StatelessWidget {
                       color: isGenerating
                           ? AppColors.accentAiSecondary
                           : AppColors.success,
-                      boxShadow: isGenerating
-                          ? [
-                              BoxShadow(
-                                color: AppColors.accentAiSecondary
-                                    .withValues(alpha: 0.6),
-                                blurRadius: 6,
-                              ),
-                            ]
-                          : [],
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -301,7 +265,7 @@ class _NovaHeader extends StatelessWidget {
             icon: Icons.more_horiz_rounded,
             onTap: () {},
             size: 38,
-iconColor: AppColors.textSecondaryFor(Theme.of(context).brightness),
+            iconColor: AppColors.textSecondaryFor(Theme.of(context).brightness),
           ),
         ],
       ),
@@ -309,7 +273,76 @@ iconColor: AppColors.textSecondaryFor(Theme.of(context).brightness),
   }
 }
 
-// ── Nova Avatar with animated glow ─────────────────────────────────────────
+class _ChatHistoryDrawer extends ConsumerWidget {
+  const _ChatHistoryDrawer();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final conversationsAsync = ref.watch(conversationListProvider);
+    final activeConversationId = ref.watch(activeConversationIdProvider);
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            ListTile(
+              title: const Text('Chat history'),
+              trailing: IconButton(
+                onPressed: () async {
+                  await ref
+                      .read(aiChatControllerProvider.notifier)
+                      .startNewConversation(initialTitle: 'New chat');
+                  if (context.mounted) Navigator.of(context).pop();
+                },
+                icon: const Icon(Icons.add_rounded),
+              ),
+            ),
+            Expanded(
+              child: conversationsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, st) => const Center(
+                  child: Text('Could not load conversations.'),
+                ),
+                data: (conversations) {
+                  if (conversations.isEmpty) {
+                    return const Center(child: Text('No conversations yet.'));
+                  }
+                  return ListView.builder(
+                    itemCount: conversations.length,
+                    itemBuilder: (context, index) {
+                      final conversation = conversations[index];
+                      final selected = conversation.id == activeConversationId;
+                      return ListTile(
+                        selected: selected,
+                        title: Text(conversation.title),
+                        subtitle: Text(
+                          _fmt(conversation.createdAt),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () async {
+                          await ref
+                              .read(aiChatControllerProvider.notifier)
+                              .loadConversation(conversation.id);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _fmt(DateTime dt) {
+    final d = dt;
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+}
 
 class _NovaAvatar extends StatefulWidget {
   final bool isGenerating;
@@ -333,12 +366,11 @@ class _NovaAvatarState extends State<_NovaAvatar>
   }
 
   @override
-  void didUpdateWidget(_NovaAvatar old) {
-    super.didUpdateWidget(old);
-    if (widget.isGenerating != old.isGenerating) {
-      _controller.duration = Duration(
-        milliseconds: widget.isGenerating ? 800 : 2000,
-      );
+  void didUpdateWidget(covariant _NovaAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isGenerating != oldWidget.isGenerating) {
+      _controller.duration =
+          Duration(milliseconds: widget.isGenerating ? 800 : 2000);
     }
   }
 
@@ -354,8 +386,6 @@ class _NovaAvatarState extends State<_NovaAvatar>
       animation: _controller,
       builder: (context, child) {
         final scale = 1.0 + (_controller.value * 0.06);
-        final glowOpacity = 0.2 + (_controller.value * 0.35);
-        final blurRadius = 10.0 + (_controller.value * 14.0);
         return Transform.scale(
           scale: scale,
           child: Container(
@@ -364,29 +394,10 @@ class _NovaAvatarState extends State<_NovaAvatar>
             decoration: BoxDecoration(
               gradient: AppColors.aiGradient,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.accentAiPrimary
-                      .withValues(alpha: glowOpacity),
-                  blurRadius: blurRadius,
-                  spreadRadius: 1 + (_controller.value * 2),
-                ),
-              ],
             ),
-            child: Center(
-              child: Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.2),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: Colors.white,
-                  size: 12,
-                ),
-              ),
+            child: const Center(
+              child: Icon(Icons.auto_awesome_rounded,
+                  color: Colors.white, size: 18),
             ),
           ),
         );
@@ -395,8 +406,6 @@ class _NovaAvatarState extends State<_NovaAvatar>
   }
 }
 
-// ── Chat Message Bubble ────────────────────────────────────────────────────
-
 class _ChatMessageWidget extends StatelessWidget {
   final ChatMessageModel message;
   const _ChatMessageWidget({required this.message});
@@ -404,291 +413,39 @@ class _ChatMessageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final isUser = message.sender == MessageSender.user;
+    final isUser = message.sender == ChatSender.user;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
       child: Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width *
-                (isUser ? 0.78 : 0.88),
+            maxWidth:
+                MediaQuery.of(context).size.width * (isUser ? 0.78 : 0.88),
           ),
           padding: const EdgeInsets.all(AppDimensions.spacingMd + 2),
           decoration: BoxDecoration(
             gradient: isUser ? AppColors.aiGradient : null,
             color: isUser ? null : AppColors.surfaceFor(brightness),
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(AppDimensions.radiusLg),
-              topRight: const Radius.circular(AppDimensions.radiusLg),
-              bottomLeft: Radius.circular(
-                isUser ? AppDimensions.radiusLg : AppDimensions.radiusXs,
-              ),
-              bottomRight: Radius.circular(
-                isUser ? AppDimensions.radiusXs : AppDimensions.radiusLg,
-              ),
-            ),
-            border: isUser
-                ? null
-                : Border.all(
-                    color: AppColors.textSecondaryFor(brightness)
-                        .withValues(alpha: 0.1),
-                  ),
+            borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
           ),
-          child: Column(
-            crossAxisAlignment: isUser
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              _RichMessageContent(text: message.text, isUser: isUser),
-              const SizedBox(height: AppDimensions.spacingXs),
-              Text(
-                _formatTime(message.timestamp),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: isUser
-                      ? Colors.white.withValues(alpha: 0.6)
-                      : AppColors.textSecondaryFor(brightness)
-                          .withValues(alpha: 0.5),
-                ),
-              ),
-            ],
+          child: Text(
+            message.message,
+            style: TextStyle(
+              color:
+                  isUser ? Colors.white : AppColors.textPrimaryFor(brightness),
+              height: 1.45,
+            ),
           ),
         ),
       ),
     );
   }
-
-  String _formatTime(DateTime t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
 }
 
-// ── Rich Message Content ───────────────────────────────────────────────────
-
-class _RichMessageContent extends StatelessWidget {
-  final String text;
-  final bool isUser;
-  const _RichMessageContent({
-    required this.text,
-    required this.isUser,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final lines = text.split('\n');
-    final hasBullets = lines.any((l) =>
-        l.trimLeft().startsWith('•') || l.trimLeft().startsWith('-'));
-
-    if (hasBullets) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _buildBulletList(context, lines, isUser),
-      );
-    }
-    if (text.contains('A)') && text.contains('B)')) {
-      return _buildQuizContent(context, lines, isUser);
-    }
-    return _buildFormattedText(context, text, user: isUser);
-  }
-
-  List<Widget> _buildBulletList(
-    BuildContext context,
-    List<String> lines,
-    bool user,
-  ) {
-    final brightness = Theme.of(context).brightness;
-    final widgets = <Widget>[];
-    for (final line in lines) {
-      final trimmed = line.trimLeft();
-      if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
-        final bulletText =
-            trimmed.replaceFirst(RegExp(r'^[•\-]\s*'), '');
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(bottom: 4, left: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '•  ',
-                style: TextStyle(
-                  color: user
-                      ? Colors.white
-                      : AppColors.accentAiSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
-              ),
-              Expanded(
-                child: _buildFormattedText(
-                  context,
-                  bulletText,
-                  user: user,
-                  defaultColor: user
-                      ? Colors.white.withValues(alpha: 0.9)
-                      : AppColors.textPrimaryFor(brightness),
-                ),
-              ),
-            ],
-          ),
-        ));
-      } else if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(bottom: 6, top: 4),
-          child: Text(
-            trimmed.replaceAll('**', ''),
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: user ? Colors.white : AppColors.textPrimaryFor(brightness),
-            ),
-          ),
-        ));
-      } else if (trimmed.isNotEmpty) {
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: _buildFormattedText(
-            context,
-            trimmed,
-            user: user,
-            defaultColor: user
-                ? Colors.white.withValues(alpha: 0.9)
-                : AppColors.textPrimaryFor(brightness),
-          ),
-        ));
-      }
-    }
-    return widgets;
-  }
-
-  Widget _buildQuizContent(BuildContext context, List<String> lines, bool user) {
-    final brightness = Theme.of(context).brightness;
-    final color =
-        user ? Colors.white : AppColors.textPrimaryFor(brightness);
-    final muted = user
-        ? Colors.white.withValues(alpha: 0.7)
-        : AppColors.textSecondaryFor(brightness);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines.map((line) {
-        final trimmed = line.trim();
-        if (trimmed.isEmpty) return const SizedBox(height: 4);
-        if (trimmed.startsWith('A)') ||
-            trimmed.startsWith('B)') ||
-            trimmed.startsWith('C)') ||
-            trimmed.startsWith('D)')) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 4, left: 8),
-            child: Text(
-              trimmed,
-              style: TextStyle(
-                fontSize: 14,
-                color: color,
-                fontWeight: FontWeight.w600,
-                height: 1.4,
-              ),
-            ),
-          );
-        }
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            trimmed,
-            style: TextStyle(
-              fontSize: 14,
-              color: trimmed.startsWith('**') ? color : muted,
-              fontWeight: trimmed.startsWith('**')
-                  ? FontWeight.w800
-                  : FontWeight.w400,
-              height: 1.4,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildFormattedText(
-    BuildContext context,
-    String text, {
-    required bool user,
-    Color? defaultColor,
-  }) {
-    final brightness = Theme.of(context).brightness;
-    final color = defaultColor ??
-        (user ? Colors.white : AppColors.textPrimaryFor(brightness));
-    final regex = RegExp(r'\*\*(.*?)\*\*');
-    final matches = regex.allMatches(text);
-    if (matches.isEmpty) {
-      return Text(
-        text,
-        style: TextStyle(
-          fontSize: 15,
-          color: color,
-          height: 1.5,
-        ),
-      );
-    }
-    final spans = <InlineSpan>[];
-    int lastEnd = 0;
-    for (final match in matches) {
-      if (match.start > lastEnd) {
-        spans.add(TextSpan(
-          text: text.substring(lastEnd, match.start),
-          style:
-              TextStyle(fontSize: 15, color: color, height: 1.5),
-        ));
-      }
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: TextStyle(
-          fontSize: 15,
-          color: user
-              ? Colors.white
-              : AppColors.textPrimaryFor(brightness),
-          fontWeight: FontWeight.w800,
-          height: 1.5,
-        ),
-      ));
-      lastEnd = match.end;
-    }
-    if (lastEnd < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastEnd),
-        style: TextStyle(fontSize: 15, color: color, height: 1.5),
-      ));
-    }
-    return RichText(text: TextSpan(children: spans));
-  }
-}
-
-// ── Typing Indicator ───────────────────────────────────────────────────────
-
-class _TypingIndicator extends StatefulWidget {
+class _TypingIndicator extends StatelessWidget {
   const _TypingIndicator();
-  @override
-  State<_TypingIndicator> createState() => _TypingIndicatorState();
-}
 
-class _TypingIndicatorState extends State<_TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
@@ -697,58 +454,17 @@ class _TypingIndicatorState extends State<_TypingIndicator>
       child: Padding(
         padding: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: AppColors.surfaceFor(brightness),
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(AppDimensions.radiusLg),
-              topRight: Radius.circular(AppDimensions.radiusLg),
-              bottomRight: Radius.circular(AppDimensions.radiusLg),
-              bottomLeft: Radius.circular(AppDimensions.radiusXs),
-            ),
-            border: Border.all(
-              color: AppColors.textSecondaryFor(brightness)
-                  .withValues(alpha: 0.1),
-            ),
+            borderRadius: BorderRadius.circular(AppDimensions.radiusLg),
           ),
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _dot(0),
-                  const SizedBox(width: 4),
-                  _dot(1),
-                  const SizedBox(width: 4),
-                  _dot(2),
-                ],
-              );
-            },
-          ),
+          child: const Text('AI is typing...'),
         ),
       ),
     );
   }
-  Widget _dot(int index) {
-    final opacity =
-        ((_controller.value * 3 + index) % 1.0).clamp(0.3, 1.0);
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.accentAiPrimary
-            .withValues(alpha: opacity),
-      ),
-    );
-  }
 }
-
-// ── Suggestion Chips ───────────────────────────────────────────────────────
 
 class _SuggestionChips extends StatelessWidget {
   final ValueChanged<String> onTap;
@@ -758,10 +474,10 @@ class _SuggestionChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final suggestions = [
-      _ChipData(Icons.explore_outlined, 'Explain this topic'),
-      _ChipData(Icons.quiz_outlined, 'Give me a quiz'),
-      _ChipData(Icons.summarize_outlined, 'Summarize lesson'),
-      _ChipData(Icons.auto_stories_outlined, 'Create flashcards'),
+      'Explain this topic',
+      'Give me a quiz',
+      'Summarize lesson',
+      'Create flashcards',
     ];
 
     return Container(
@@ -772,12 +488,11 @@ class _SuggestionChips extends StatelessWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: suggestions.map((chip) {
+          children: suggestions.map((label) {
             return Padding(
-              padding:
-                  const EdgeInsets.only(right: AppDimensions.spacingSm),
+              padding: const EdgeInsets.only(right: AppDimensions.spacingSm),
               child: GestureDetector(
-                onTap: () => onTap(chip.label),
+                onTap: () => onTap(label),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppDimensions.spacingMd + 2,
@@ -785,32 +500,16 @@ class _SuggestionChips extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceFor(brightness),
-                    borderRadius: BorderRadius.circular(
-                      AppDimensions.radiusFull,
-                    ),
-                    border: Border.all(
-                      color: AppColors.textSecondaryFor(brightness)
-                          .withValues(alpha: 0.12),
-                    ),
+                    borderRadius:
+                        BorderRadius.circular(AppDimensions.radiusFull),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        chip.icon,
-                        size: 16,
-                        color: AppColors.accentAiSecondary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        chip.label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimaryFor(brightness),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimaryFor(brightness),
+                    ),
                   ),
                 ),
               ),
@@ -822,20 +521,12 @@ class _SuggestionChips extends StatelessWidget {
   }
 }
 
-
-class _ChipData {
-  final IconData icon;
-  final String label;
-  const _ChipData(this.icon, this.label);
-}
-
-// ── Input Bar ──────────────────────────────────────────────────────────────
-
 class _NovaInputBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool isGenerating;
   final ValueChanged<String> onSend;
+
   const _NovaInputBar({
     required this.controller,
     required this.focusNode,
@@ -861,80 +552,36 @@ class _NovaInputBar extends StatelessWidget {
             width: 0.5,
           ),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          ),
-        ],
       ),
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceFor(brightness),
-                borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
-                border: Border.all(
-                  color: AppColors.textSecondaryFor(brightness)
-                      .withValues(alpha: 0.1),
-                ),
-              ),
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                style: TextStyle(
-                  color: AppColors.textPrimaryFor(brightness),
-                  fontSize: 15,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Ask Nova anything...',
-                  hintStyle: TextStyle(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              style: TextStyle(color: AppColors.textPrimaryFor(brightness)),
+              decoration: InputDecoration(
+                hintText: 'Ask Nova anything...',
+                hintStyle: TextStyle(
                     color: AppColors.textSecondaryFor(brightness)
-                        .withValues(alpha: 0.5),
-                    fontSize: 15,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.spacingLg,
-                    vertical: AppDimensions.spacingMd + 2,
-                  ),
+                        .withValues(alpha: 0.5)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+                  borderSide: BorderSide.none,
                 ),
-                maxLines: 1,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (v) {
-                  if (!isGenerating && v.trim().isNotEmpty) onSend(v);
-                },
+                filled: true,
+                fillColor: AppColors.surfaceFor(brightness),
               ),
-            ),
-          ),
-          const SizedBox(width: AppDimensions.spacingSm),
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceFor(brightness),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.textSecondaryFor(brightness)
-                      .withValues(alpha: 0.12),
-                ),
-              ),
-              child: Icon(
-                Icons.mic_outlined,
-                color: AppColors.textSecondaryFor(brightness),
-                size: 20,
-              ),
+              textInputAction: TextInputAction.send,
+              onSubmitted: (v) {
+                if (!isGenerating && v.trim().isNotEmpty) onSend(v);
+              },
             ),
           ),
           const SizedBox(width: AppDimensions.spacingSm),
           GestureDetector(
             onTap: () {
-              if (!isGenerating &&
-                  controller.text.trim().isNotEmpty) {
+              if (!isGenerating && controller.text.trim().isNotEmpty) {
                 onSend(controller.text);
               }
             },
@@ -942,35 +589,15 @@ class _NovaInputBar extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: isGenerating
-                    ? LinearGradient(
-                        colors: [
-                          AppColors.textSecondaryFor(brightness)
-                              .withValues(alpha: 0.3),
-                          AppColors.textSecondaryFor(brightness)
-                              .withValues(alpha: 0.3),
-                        ],
-                      )
-                    : AppColors.aiGradient,
+                gradient: isGenerating ? null : AppColors.aiGradient,
+                color: isGenerating
+                    ? AppColors.textSecondaryFor(brightness)
+                        .withValues(alpha: 0.2)
+                    : null,
                 shape: BoxShape.circle,
-                boxShadow: isGenerating
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: AppColors.accentAiPrimary
-                              .withValues(alpha: 0.35),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
               ),
-              child: Icon(
-                isGenerating
-                    ? Icons.hourglass_empty_rounded
-                    : Icons.send_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
+              child:
+                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],

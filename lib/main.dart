@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 import 'core/theme/app_theme.dart';
 import 'core/constants/constants.dart';
@@ -13,7 +15,6 @@ import 'features/auth/screens/onboarding_screen.dart';
 import 'features/auth/screens/user_details_onboarding_screen.dart';
 import 'core/widgets/main_app_shell.dart';
 import 'core/widgets/admin_app_shell.dart';
-
 
 // ─── Global Providers ───────────────────────────────────────────────────────
 
@@ -28,14 +29,15 @@ final userPreferencesRepositoryProvider =
 
 // ─── Entry Point ────────────────────────────────────────────────────────────
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await dotenv.load(fileName: ".env");
+
   await Supabase.initialize(
+
     url: 'https://qjbcmjmaowvxlitvzrqh.supabase.co',
     publishableKey:
-
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqYmNtam1hb3d2eGxpdHZ6cnFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwMzY0NzcsImV4cCI6MjA5NTYxMjQ3N30.uCC1_9uupE4GULc0_eAqxiQyMPnvU0m6KmDcHGfTma4',
   );
 
@@ -64,9 +66,6 @@ class MyApp extends ConsumerWidget {
 
 class _AppRouter extends ConsumerStatefulWidget {
   const _AppRouter();
-
-
-
 
   @override
   ConsumerState<_AppRouter> createState() => _AppRouterState();
@@ -105,7 +104,8 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
     final isAdmin = await ref.read(isAdminProvider.future);
     if (!mounted) return;
 
-    nav.pushReplacement(_fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()));
+    nav.pushReplacement(
+        _fadeRoute(isAdmin ? const AdminAppShell() : const MainAppShell()));
   }
 
   @override
@@ -158,14 +158,17 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 40),
+                const Icon(Icons.error_outline_rounded,
+                    color: AppColors.error, size: 40),
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
                     'Auth error. Please restart the app.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textPrimaryDark, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: AppColors.textPrimaryDark,
+                        fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -178,12 +181,13 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
           _initialNavigationDone = true;
           // Run navigation after current frame so Navigator has a context.
           WidgetsBinding.instance.addPostFrameCallback((_) async {
+            final nav = Navigator.of(context);
             try {
               await _navigateToAppropriateScreen(user: user);
             } catch (_) {
               if (!mounted) return;
               // Fail safe: go to login.
-              Navigator.of(context).pushAndRemoveUntil(
+              nav.pushAndRemoveUntil(
                 _fadeRoute(const AuthScreen()),
                 (_) => false,
               );
@@ -237,14 +241,8 @@ class _AppRouterState extends ConsumerState<_AppRouter> {
   }
 }
 
-
-
-
 class _SplashLogo extends StatefulWidget {
-  const _SplashLogo({super.key});
-
-
-
+  const _SplashLogo();
 
   @override
   State<_SplashLogo> createState() => _SplashLogoState();

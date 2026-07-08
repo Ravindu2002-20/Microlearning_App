@@ -1,5 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api
 
+import 'dart:io';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,6 +19,9 @@ class YoutubeVideosPage extends StatefulWidget {
 }
 
 class _YoutubeVideosPageState extends State<YoutubeVideosPage> {
+  static const int preloadRadius = 3;
+  static List<LessonModel> _lessonCache = <LessonModel>[];
+
   late final Future<List<LessonModel>> _lessonsFuture;
   late final FeedVideoManager _videoManager;
   final PageController _pageController = PageController();
@@ -30,9 +35,15 @@ class _YoutubeVideosPageState extends State<YoutubeVideosPage> {
   }
 
   Future<List<LessonModel>> _loadLessons() async {
+    if (_lessonCache.isNotEmpty) {
+      await _videoManager.setLessons(_lessonCache);
+      return _lessonCache;
+    }
+
     final response = await Supabase.instance.client
         .from('lessons')
-        .select('id, title, description, category, video_url, created_at')
+        .select(
+            'id, title, description, category, video_url, video_path, created_at')
         .order('created_at', ascending: false)
         .limit(100);
 
@@ -41,6 +52,7 @@ class _YoutubeVideosPageState extends State<YoutubeVideosPage> {
         .where(_isVideoLesson)
         .toList();
 
+    _lessonCache = List<LessonModel>.unmodifiable(lessons);
     await _videoManager.setLessons(lessons);
     return lessons;
   }
@@ -93,23 +105,19 @@ class _YoutubeVideosPageState extends State<YoutubeVideosPage> {
           return Stack(
             fit: StackFit.expand,
             children: [
-              ValueListenableBuilder<int>(
-                valueListenable: _activeIndex,
-                builder: (context, activeIndex, _) {
-                  _videoManager.updateWindow(activeIndex);
-                  return PageView.builder(
-                    controller: _pageController,
-                    scrollDirection: Axis.vertical,
-                    itemCount: lessons.length,
-                    onPageChanged: (index) => _activeIndex.value = index,
-                    itemBuilder: (context, index) {
-                      return LessonVideoWidget(
-                        key: ValueKey(lessons[index].id),
-                        manager: _videoManager,
-                        lesson: lessons[index],
-                        isActive: index == activeIndex,
-                      );
-                    },
+              PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                itemCount: lessons.length,
+                onPageChanged: (index) {
+                  _activeIndex.value = index;
+                  _videoManager.updateWindow(index);
+                },
+                itemBuilder: (context, index) {
+                  return LessonVideoWidget(
+                    key: ValueKey(lessons[index].id),
+                    manager: _videoManager,
+                    lesson: lessons[index],
                   );
                 },
               ),
@@ -119,7 +127,6 @@ class _YoutubeVideosPageState extends State<YoutubeVideosPage> {
                   final lesson =
                       lessons[activeIndex.clamp(0, lessons.length - 1)];
                   return LessonOverlayWidget(
-                    lesson: lesson,
                     child: LessonCaptionWidget(lesson: lesson),
                   );
                 },
@@ -148,30 +155,38 @@ class FeedVideoManager extends ChangeNotifier {
     _activeIndex = activeIndex.clamp(0, _lessons.length - 1);
 
     final keep = <String>{};
-    for (final offset in const [-1, 0, 1, 2]) {
+    for (var offset = -_YoutubeVideosPageState.preloadRadius;
+        offset <= _YoutubeVideosPageState.preloadRadius;
+        offset++) {
       final index = _activeIndex + offset;
       if (index < 0 || index >= _lessons.length) continue;
       keep.add(_lessons[index].id);
     }
 
-    for (final lesson in _lessons) {
-      final shouldKeep = keep.contains(lesson.id);
-      if (shouldKeep) {
-        _ensureEntry(lesson);
-      } else {
-        _disposeEntry(lesson.id);
-      }
+    final toDispose = _entries.keys.where((id) => !keep.contains(id)).toList();
+    for (final lessonId in toDispose) {
+      _disposeEntry(lessonId);
     }
 
-    for (final lesson in _lessons) {
+    for (var offset = -_YoutubeVideosPageState.preloadRadius;
+        offset <= _YoutubeVideosPageState.preloadRadius;
+        offset++) {
+      final index = _activeIndex + offset;
+      if (index < 0 || index >= _lessons.length) continue;
+      final lesson = _lessons[index];
       final entry = _entries[lesson.id];
-      if (entry == null) continue;
-      if (lesson.id == _lessons[_activeIndex].id) {
+      if (entry == null) {
+        unawaited(_ensureEntry(lesson, shouldPlay: index == _activeIndex));
+        continue;
+      }
+      if (index == _activeIndex) {
         entry.play();
       } else {
         entry.pause();
       }
     }
+
+    _primeForwardWindow();
     notifyListeners();
   }
 
@@ -179,17 +194,49 @@ class FeedVideoManager extends ChangeNotifier {
 
   Future<void> preload(LessonModel lesson) async {
     if (_disposed) return;
-    await _ensureEntry(lesson);
+    await _ensureEntry(lesson, shouldPlay: false);
   }
 
-  Future<_ManagedVideoEntry?> _ensureEntry(LessonModel lesson) async {
+  Future<_ManagedVideoEntry?> _ensureEntry(
+    LessonModel lesson, {
+    required bool shouldPlay,
+  }) async {
     final existing = _entries[lesson.id];
-    if (existing != null) return existing;
+    if (existing != null) {
+      if (shouldPlay) {
+        existing.play();
+      } else {
+        existing.pause();
+      }
+      return existing;
+    }
 
     final entry = _ManagedVideoEntry(lesson);
     _entries[lesson.id] = entry;
-    await entry.initialize();
+    await entry.initialize(shouldPlay: shouldPlay);
+    if (_disposed) {
+      entry.dispose();
+      return null;
+    }
+    if (shouldPlay) {
+      entry.play();
+    } else {
+      entry.pause();
+    }
     return entry;
+  }
+
+  void _primeForwardWindow() {
+    if (_disposed || _lessons.isEmpty) return;
+    for (var offset = 1;
+        offset <= _YoutubeVideosPageState.preloadRadius;
+        offset++) {
+      final index = _activeIndex + offset;
+      if (index < 0 || index >= _lessons.length) continue;
+      final lesson = _lessons[index];
+      if (_entries.containsKey(lesson.id)) continue;
+      unawaited(_ensureEntry(lesson, shouldPlay: false));
+    }
   }
 
   void _disposeEntry(String lessonId) {
@@ -217,7 +264,7 @@ class _ManagedVideoEntry {
 
   _ManagedVideoEntry(this.lesson);
 
-  Future<void> initialize() async {
+  Future<void> initialize({required bool shouldPlay}) async {
     final videoUrl = lesson.videoUrl?.trim() ?? '';
     if (videoUrl.startsWith('yt:')) {
       final videoId = videoUrl.substring(3).trim();
@@ -232,6 +279,9 @@ class _ManagedVideoEntry {
         ),
       );
       ready.value = true;
+      if (shouldPlay) {
+        play();
+      }
       return;
     }
 
@@ -240,16 +290,33 @@ class _ManagedVideoEntry {
       return;
     }
 
-    final controller = VideoPlayerController.networkUrl(uri);
+    final localFile = await _resolveLocalFile(videoUrl);
+    final controller = localFile != null
+        ? VideoPlayerController.file(localFile)
+        : VideoPlayerController.networkUrl(uri);
     videoController = controller;
     await controller.initialize();
     await controller.setLooping(true);
     ready.value = true;
+    if (shouldPlay) {
+      play();
+    }
+  }
+
+  Future<File?> _resolveLocalFile(String pathOrUrl) async {
+    final normalized = pathOrUrl
+        .replaceFirst('file://', '')
+        .replaceFirst(RegExp(r'^file:/+'), '');
+    final file = File(normalized);
+    if (await file.exists()) {
+      return file;
+    }
+    return null;
   }
 
   void play() {
-    if (_playing) return;
     _playing = true;
+
     videoController?.play();
     youtubeController?.play();
   }
@@ -275,13 +342,11 @@ class _ManagedVideoEntry {
 class LessonVideoWidget extends StatefulWidget {
   final FeedVideoManager manager;
   final LessonModel lesson;
-  final bool isActive;
 
   const LessonVideoWidget({
     super.key,
     required this.manager,
     required this.lesson,
-    required this.isActive,
   });
 
   @override
@@ -370,29 +435,20 @@ class _LessonVideoWidgetState extends State<LessonVideoWidget> {
 }
 
 class LessonOverlayWidget extends StatelessWidget {
-  final LessonModel lesson;
   final Widget child;
 
   const LessonOverlayWidget({
     super.key,
-    required this.lesson,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 24,
-            child: child,
-          ),
-        ],
-      ),
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 24,
+      child: IgnorePointer(child: child),
     );
   }
 }

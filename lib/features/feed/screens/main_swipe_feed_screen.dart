@@ -508,8 +508,8 @@ class _FeedVideoLayerState extends State<_FeedVideoLayer> {
 
   void _syncPlaybackWithActiveState() {
     final shouldPlay = widget.isActive;
-    if (_isPlaying == shouldPlay) return;
     _isPlaying = shouldPlay;
+
 
     if (_usingVideo && _controller != null) {
       if (shouldPlay) {

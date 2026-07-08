@@ -656,7 +656,9 @@ final userAsync = ref.read(sessionUserProvider);
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _SectionTitle(title: 'Quiz'),
+                        _SectionTitle(
+                          title: 'Quiz',
+                        ),
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.all(14),
@@ -680,14 +682,21 @@ final userAsync = ref.read(sessionUserProvider);
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'Ready for a quick quiz?',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.black,
-                                  ),
+Expanded(
+                                child: Builder(
+                                  builder: (context) {
+                                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                                    return Text(
+                                      'Ready for a quick quiz?',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.textPrimaryFor(
+                                          isDark ? Brightness.dark : Brightness.light,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 10),

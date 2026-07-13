@@ -773,12 +773,23 @@ class LearningRepository {
         streak: streak,
       );
 
-      final rankRows = await _supabase.rpc('get_user_rank', params: {
-        'target_user_id': userUuid,
-      });
-      final rank = rankRows is List && rankRows.isNotEmpty
-          ? (rankRows.first as Map<String, dynamic>)['rank'] ?? 0
-          : 0;
+      // Calculate rank by comparing with all users sorted by total_xp
+      final summaryRows = await _supabase
+          .from('user_xp_summary')
+          .select('user_id, total_xp')
+          .order('total_xp', ascending: false);
+
+      int rank = 1;
+      final summaryList = summaryRows as List<dynamic>;
+      for (final rowAny in summaryList) {
+        final row = rowAny as Map<String, dynamic>;
+        final userId = row['user_id']?.toString();
+        if (userId == null) continue;
+        if (userId == userUuid) {
+          break;
+        }
+        rank++;
+      }
 
       return {
         'lessonsCount': lessonsCount,

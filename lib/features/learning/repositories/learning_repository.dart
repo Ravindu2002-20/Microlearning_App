@@ -703,6 +703,43 @@ class LearningRepository {
     }
   }
 
+  /// Fetches per-weekday completion counts for the user.
+  /// Uses `user_progress.last_accessed` (grouped by day) and `is_completed=true`.
+  /// Returns a map where weekday keys are Dart's `DateTime.weekday` (1=Mon..7=Sun).
+  Future<Map<int, int>> fetchWeeklyCompletionCounts({
+    required String userUuid,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      final startDay = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+
+      final rows = await _supabase
+          .from('user_progress')
+          .select('last_accessed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true)
+          .gte('last_accessed', startDay.toIso8601String());
+
+      final Map<int, int> counts = {};
+      for (final rowAny in (rows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final raw = row['last_accessed'];
+        if (raw == null) continue;
+        final parsed = DateTime.tryParse(raw.toString());
+        if (parsed == null) continue;
+        final day = DateTime(parsed.year, parsed.month, parsed.day);
+        final weekday = DateTime(day.year, day.month, day.day).weekday;
+        counts[weekday] = (counts[weekday] ?? 0) + 1;
+      }
+
+      return counts;
+    } catch (e, st) {
+      debugPrint('fetchWeeklyCompletionCounts error: $e\n$st');
+      return const <int, int>{};
+    }
+  }
+
   /// Computes user stats from `user_progress`.
   /// - lessonsCount: number of completed lessons
   /// - totalXp: sum of `score` for completed lessons
@@ -713,10 +750,12 @@ class LearningRepository {
   }) async {
     try {
       final completedRows = await _supabase
+
           .from('user_progress')
           .select('lesson_id,score,last_accessed,is_completed')
           .eq('user_id', userUuid)
           .eq('is_completed', true);
+
 
       final quizRows = await _supabase
           .from('quiz_attempts')

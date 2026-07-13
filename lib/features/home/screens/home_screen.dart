@@ -753,8 +753,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  const _XpProgressCard(),
+              const SizedBox(height: 4),
+              const _XpProgressCard(),
+
                 ],
               ),
             ),
@@ -1335,13 +1336,19 @@ class _XpProgressCardState extends State<_XpProgressCard> {
         'streak': 0,
         'level': 1,
         'xpToNextLevel': XpCalculation.xpPerLevel,
+        'weeklyCompletionCounts': <int, int>{},
       };
     }
 
-    return LearningRepository(Supabase.instance.client)
-        .fetchUserStatsFromProgress(
-      userUuid: user.id,
-    );
+    final repo = LearningRepository(Supabase.instance.client);
+    final results = await Future.wait([
+      repo.fetchUserStatsFromProgress(userUuid: user.id),
+      repo.fetchWeeklyCompletionCounts(userUuid: user.id),
+    ]);
+
+    final stats = Map<String, dynamic>.from(results[0] as Map<String, dynamic>);
+    stats['weeklyCompletionCounts'] = results[1] as Map<int, int>;
+    return stats;
   }
 
   @override
@@ -1359,6 +1366,9 @@ class _XpProgressCardState extends State<_XpProgressCard> {
             (data['level'] as int?) ?? XpCalculation.calculateLevel(totalXp);
         final xpToNextLevel = (data['xpToNextLevel'] as int?) ??
             XpCalculation.xpToNextLevel(totalXp);
+        final weeklyCompletionCounts =
+            (data['weeklyCompletionCounts'] as Map<int, int>?) ??
+                const <int, int>{};
         final fraction = xpToNextLevel <= 0
             ? 1.0
             : (totalXp % XpCalculation.xpPerLevel) / XpCalculation.xpPerLevel;
@@ -1480,7 +1490,8 @@ class _XpProgressCardState extends State<_XpProgressCard> {
                 ),
               ),
               const SizedBox(height: 12),
-              const _WeeklyBars(),
+              _WeeklyBars(weeklyCompletionCounts: weeklyCompletionCounts),
+
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -1559,38 +1570,53 @@ class _GradientProgressBar extends StatelessWidget {
 }
 
 class _WeeklyBars extends StatelessWidget {
-  const _WeeklyBars();
+  final Map<int, int> weeklyCompletionCounts;
+
+  const _WeeklyBars({required this.weeklyCompletionCounts});
 
   @override
   Widget build(BuildContext context) {
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const heights = [48.0, 62.0, 56.0, 70.0, 28.0, 60.0, 66.0];
+    const minBarHeight = 12.0;
+    const maxBarHeight = 70.0;
+    final maxCount = weeklyCompletionCounts.values.fold<int>(0, (max, value) {
+      return value > max ? value : max;
+    });
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: List.generate(labels.length, (index) {
-        final alpha = index == 4 ? 0.45 : 1.0;
+        final weekday = index + 1;
+        final count = weeklyCompletionCounts[weekday] ?? 0;
+        final hasActivity = count > 0;
+        final normalized = maxCount == 0 ? 0.0 : count / maxCount;
+        final barHeight = hasActivity
+            ? minBarHeight + ((maxBarHeight - minBarHeight) * normalized)
+            : minBarHeight;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 20,
-              height: heights[index],
+              height: barHeight,
               decoration: BoxDecoration(
-                color: const Color(0xFF5B5FEF).withValues(alpha: alpha),
+                color: hasActivity
+                    ? const Color(0xFF5B5FEF)
+                    : const Color(0xFF5B5FEF).withValues(alpha: 0.25),
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              // visual only
-              '',
-              style: TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
-            ),
             Text(
               labels[index],
-              style: const TextStyle(fontSize: 10, color: Color(0xFF8E8E93)),
+              style: TextStyle(
+                fontSize: 10,
+                color: hasActivity
+                    ? const Color(0xFF5B5FEF)
+                    : const Color(0xFF8E8E93),
+                fontWeight: hasActivity ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ],
         );

@@ -7,6 +7,7 @@ import '../../../core/constants/constants.dart';
 
 import '../../../core/services/session_manager.dart';
 import '../../../features/feed/controllers/feed_providers.dart';
+import '../../lessons/screens/lesson_detail_screen.dart';
 import '../../quiz/screens/quiz_play_screen.dart';
 import '../../quiz/screens/quiz_lesson_picker_sheet.dart';
 import '../services/video_recommendation_service.dart';
@@ -305,6 +306,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _openLessons() => widget.onOpenLessons();
 
+  void _openRecommendedVideo(LessonModel item) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LessonDetailScreen.fromModel(item),
+      ),
+    );
+  }
+
   void _showRecommendationSheet(String title) {
     showModalBottomSheet(
       context: context,
@@ -577,45 +586,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               .watch(videoRecommendationAsyncProvider(user.id));
 
                           return recAsync.when(
-                            loading: () => GridView.builder(
+                            loading: () => ListView.separated(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: 4,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 1.05,
-                              ),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
                               itemBuilder: (_, __) {
                                 return const _RecommendationSkeleton();
                               },
                             ),
-                            error: (_, __) => const SizedBox.shrink(),
+                            error: (error, stack) {
+                              debugPrint(
+                                'Home recommendations failed for user ${user.id}: $error\n$stack',
+                              );
+                              return const _RecommendationEmptyState(
+                                message:
+                                    'We could not load recommendations right now.',
+                              );
+                            },
                             data: (items) {
                               if (items.isEmpty) {
-                                return const SizedBox.shrink();
+                                debugPrint(
+                                  'Home recommendations returned 0 items for user ${user.id}.',
+                                );
+                                return const _RecommendationEmptyState(
+                                  message:
+                                      'No recommended videos are available yet.',
+                                );
                               }
 
                               final visibleItems = items.take(4).toList();
 
-                              return GridView.builder(
+                              return ListView.separated(
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: visibleItems.length,
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 0.72,
-                                ),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
                                   final item = visibleItems[index];
-                                  return _RecommendationCard(
+                                  return _RecommendedVideoRow(
                                     item: item,
-                                    onTap: _openLessons,
+                                    onTap: () => _openRecommendedVideo(item),
                                     onMore: () =>
                                         _showRecommendationSheet(item.title),
                                   );
@@ -1108,13 +1121,13 @@ class _RecentSearchRow extends StatelessWidget {
   }
 }
 
-class _RecommendationCard extends StatelessWidget {
+class _RecommendedVideoRow extends StatelessWidget {
   final LessonModel item;
 
   final VoidCallback onTap;
   final VoidCallback onMore;
 
-  const _RecommendationCard({
+  const _RecommendedVideoRow({
     required this.item,
     required this.onTap,
     required this.onMore,
@@ -1122,99 +1135,108 @@ class _RecommendationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final category = item.category.isNotEmpty ? item.category : 'Video';
+    final subtitle =
+        item.description.isNotEmpty ? item.description : 'Tap to watch now';
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceFor(brightness),
+            borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+            border: Border.all(
+              color:
+                  AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.network(
-                      item.thumbnailUrl ?? '',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: const Color(0xFF5B5FEF),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.play_circle_fill_rounded,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: GestureDetector(
-                        onTap: onMore,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.more_vert_rounded,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: 68,
+                    height: 68,
+                    child: item.thumbnailUrl != null &&
+                            item.thumbnailUrl!.isNotEmpty
+                        ? Image.network(
+                            item.thumbnailUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _recommendationThumbFallback(brightness),
+                          )
+                        : _recommendationThumbFallback(brightness),
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isDark ? AppColors.textPrimaryDark : Colors.black,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                      height: 1.2,
-                    ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryFor(brightness),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimaryFor(brightness),
+                          height: 1.18,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondaryFor(brightness),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.category.isNotEmpty ? item.category : 'Video',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF5B5FEF),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.play_circle_fill_rounded,
+                  color: AppColors.primaryFor(brightness),
+                  size: 28,
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _recommendationThumbFallback(Brightness brightness) {
+    return Container(
+      color: AppColors.surfaceFor(brightness),
+      child: Center(
+        child: Icon(
+          Icons.play_circle_fill_rounded,
+          size: 40,
+          color: AppColors.textSecondaryFor(brightness),
         ),
       ),
     );
@@ -1687,11 +1709,65 @@ class _RecommendationSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 88,
       decoration: BoxDecoration(
         color: Theme.of(context).brightness == Brightness.dark
             ? Colors.white10
             : Colors.black12,
         borderRadius: BorderRadius.circular(16),
+      ),
+    );
+  }
+}
+
+class _RecommendationEmptyState extends StatelessWidget {
+  final String message;
+
+  const _RecommendationEmptyState({
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : const Color(0xFFEDEDF4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF5B5FEF).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.play_circle_fill_rounded,
+              color: Color(0xFF5B5FEF),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimaryDark : Colors.black,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

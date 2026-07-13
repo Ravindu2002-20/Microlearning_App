@@ -23,13 +23,8 @@ void main() {
           'topics': ['AI', 'Productivity'],
         },
       };
-      final profile = {
-        'profile_data': {
-          'interests': ['Science'],
-        },
-      };
 
-      expect(service.extractInterestingFields(prefs, profile), ['AI', 'Productivity', 'Science']);
+      expect(service.extractInterestingFields(prefs), ['AI', 'Productivity']);
     });
 
     test('converts storage and youtube items into lesson models', () {

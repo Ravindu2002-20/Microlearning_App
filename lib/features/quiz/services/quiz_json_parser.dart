@@ -16,8 +16,6 @@ class QuizJsonParser {
       }
 
       final questions = <QuizQuestionModel>[];
-      var mcqCount = 0;
-      var shortAnswerCount = 0;
 
       for (final item in questionsRaw) {
         final map = item is Map<String, dynamic>
@@ -27,36 +25,34 @@ class QuizJsonParser {
                 : null;
         if (map == null) return null;
 
-        final question = QuizQuestionModel(
-          questionText: map['question']?.toString() ?? '',
-          options: _parseOptions(map['options']),
-          correctAnswer: map['correct_answer']?.toString() ?? '',
-          explanation: map['explanation']?.toString() ?? '',
-          questionType: map['type']?.toString() ?? '',
-          acceptedAnswers: _parseAcceptedAnswers(map['accepted_answers']),
+        final questionType = map['type']?.toString().toLowerCase().trim();
+        if (questionType != 'mcq') return null;
+
+        final options = _parseOptions(map['options']);
+        final correctAnswer = map['correct_answer']?.toString() ?? '';
+        final explanation = map['explanation']?.toString() ?? '';
+        final questionText = map['question']?.toString() ?? '';
+
+        if (questionText.trim().isEmpty) return null;
+        if (correctAnswer.trim().isEmpty) return null;
+        if (explanation.trim().isEmpty) return null;
+        if (options == null || options.length != 4) return null;
+
+        final correctNormalized = correctAnswer.trim();
+        final matchesOption = options.any((option) => option.trim() == correctNormalized);
+        if (!matchesOption) return null;
+
+        questions.add(
+          QuizQuestionModel(
+            questionText: questionText,
+            options: options,
+            correctAnswer: correctAnswer,
+            explanation: explanation,
+            questionType: 'mcq',
+            acceptedAnswers: const [],
+          ),
         );
-
-        if (question.questionText.trim().isEmpty || question.correctAnswer.trim().isEmpty) {
-          return null;
-        }
-
-        if (question.options != null) {
-          if (question.questionType != 'mcq' || question.options!.length != 4) return null;
-          if (!question.options!.any((option) => option.trim() == question.correctAnswer.trim())) {
-            return null;
-          }
-          mcqCount++;
-        } else {
-          if (question.questionType != 'short_answer') return null;
-          if (question.acceptedAnswers.isEmpty) return null;
-          shortAnswerCount++;
-        }
-
-        questions.add(question);
       }
-
-      if (mcqCount < (questions.length * 0.7).floor()) return null;
-      if (shortAnswerCount < (questions.length * 0.3).floor()) return null;
 
       return QuizModel(
         lessonId: lessonId,
@@ -83,10 +79,5 @@ class QuizJsonParser {
     return options.isEmpty ? null : options;
   }
 
-  List<String> _parseAcceptedAnswers(dynamic raw) {
-    if (raw is List) {
-      return raw.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
-    }
-    return const [];
-  }
+
 }

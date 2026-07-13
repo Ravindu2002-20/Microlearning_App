@@ -14,7 +14,8 @@ import '../../learning/models/lesson_model.dart';
 import '../../learning/repositories/xp_calculation.dart';
 import '../../learning/repositories/learning_repository.dart';
 
-final videoRecommendationAsyncProvider = FutureProvider.family<List<LessonModel>, String>((ref, userId) async {
+final videoRecommendationAsyncProvider =
+    FutureProvider.family<List<LessonModel>, String>((ref, userId) async {
   final svc = ref.read(videoRecommendationServiceProvider);
   return svc.recommendForUser(userUuid: userId, topN: 4);
 });
@@ -28,7 +29,6 @@ class HomeScreen extends ConsumerStatefulWidget {
     required this.onOpenLessons,
     required this.onOpenProfileTab,
   });
-
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -59,9 +59,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadProfile() async {
-final userAsync = ref.read(sessionUserProvider);
+    final userAsync = ref.read(sessionUserProvider);
     final user = userAsync.asData?.value;
-
 
     final nameFromMeta = _nameFromMetadata(user);
     final avatarFromMeta = _avatarFromMetadata(user);
@@ -71,7 +70,7 @@ final userAsync = ref.read(sessionUserProvider);
 
     if (user != null) {
       try {
-          final profile = await Supabase.instance.client
+        final profile = await Supabase.instance.client
             .from('profiles')
             .select('full_name, username, avatar_url')
             .eq('id', user.id)
@@ -153,7 +152,6 @@ final userAsync = ref.read(sessionUserProvider);
           ),
         ),
       );
-
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -166,7 +164,6 @@ final userAsync = ref.read(sessionUserProvider);
         });
       }
     }
-
   }
 
   Future<void> _clearRecentSearches() async {
@@ -276,7 +273,8 @@ final userAsync = ref.read(sessionUserProvider);
                       : ListView.separated(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: all.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1),
+                          separatorBuilder: (_, __) =>
+                              const Divider(height: 1, thickness: 1),
                           itemBuilder: (context, index) {
                             final q = all[index];
                             return ListTile(
@@ -305,11 +303,7 @@ final userAsync = ref.read(sessionUserProvider);
     );
   }
 
-
-
   void _openLessons() => widget.onOpenLessons();
-
-
 
   void _showRecommendationSheet(String title) {
     showModalBottomSheet(
@@ -456,9 +450,8 @@ final userAsync = ref.read(sessionUserProvider);
                           // (MainAppShell must own/hold the tab state.)
                           // For now, push a profile route so the user can see their data.
                           // Switch to Profile tab inside MainAppShell.
-                        widget.onOpenProfileTab();
+                          widget.onOpenProfileTab();
                         },
-
                         child: _ProfileAvatar(
                           imageUrl: _avatarUrl,
                           initials: _initials ?? 'U',
@@ -479,8 +472,7 @@ final userAsync = ref.read(sessionUserProvider);
                       children: [
                         _SectionTitle(
                           title: 'Recent Searches',
-                          action:
-                              _recentSearches.isEmpty ? null : 'Clear',
+                          action: _recentSearches.isEmpty ? null : 'Clear',
                           onAction: _recentSearches.isEmpty
                               ? null
                               : _clearRecentSearches,
@@ -493,25 +485,6 @@ final userAsync = ref.read(sessionUserProvider);
                                 controller: _searchController,
                                 onClear: () => _searchController.clear(),
                                 onSubmitted: (_) => _onSearch(),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            InkWell(
-                              onTap: _onSearch,
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 8,
-                                  
-                                ),
-                                child: Text(
-                                  'Search',
-                                  style: TextStyle(
-                                    color: Color(0xFF5B5FEF),
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
-                                  ),
-                                ),
                               ),
                             ),
                           ],
@@ -557,9 +530,8 @@ final userAsync = ref.read(sessionUserProvider);
                               ],
                             );
                           }),
-
-
-                        if (!_loadingSearches && _recentSearches.isNotEmpty) ...[
+                        if (!_loadingSearches &&
+                            _recentSearches.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           GestureDetector(
                             onTap: _showAllRecentSearches,
@@ -589,17 +561,20 @@ final userAsync = ref.read(sessionUserProvider);
                         ),
                         const SizedBox(height: 14),
                         Consumer(builder: (context, ref, _) {
-                          final streamUser = ref.watch(sessionUserProvider).maybeWhen(
-                                data: (u) => u,
-                                orElse: () => null,
-                              );
-                          final user = streamUser ?? Supabase.instance.client.auth.currentUser;
+                          final streamUser =
+                              ref.watch(sessionUserProvider).maybeWhen(
+                                    data: (u) => u,
+                                    orElse: () => null,
+                                  );
+                          final user = streamUser ??
+                              Supabase.instance.client.auth.currentUser;
 
                           if (user == null) {
                             return const SizedBox.shrink();
                           }
 
-                          final recAsync = ref.watch(videoRecommendationAsyncProvider(user.id));
+                          final recAsync = ref
+                              .watch(videoRecommendationAsyncProvider(user.id));
 
                           return recAsync.when(
                             loading: () => GridView.builder(
@@ -641,7 +616,8 @@ final userAsync = ref.read(sessionUserProvider);
                                   return _RecommendationCard(
                                     item: item,
                                     onTap: _openLessons,
-                                    onMore: () => _showRecommendationSheet(item.title),
+                                    onMore: () =>
+                                        _showRecommendationSheet(item.title),
                                   );
                                 },
                               );
@@ -663,7 +639,8 @@ final userAsync = ref.read(sessionUserProvider);
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF5B5FEF).withValues(alpha: 0.10),
+                            color:
+                                const Color(0xFF5B5FEF).withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
@@ -682,17 +659,21 @@ final userAsync = ref.read(sessionUserProvider);
                                 ),
                               ),
                               const SizedBox(width: 12),
-Expanded(
+                              Expanded(
                                 child: Builder(
                                   builder: (context) {
-                                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                                    final isDark =
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark;
                                     return Text(
                                       'Ready for a quick quiz?',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w800,
                                         color: AppColors.textPrimaryFor(
-                                          isDark ? Brightness.dark : Brightness.light,
+                                          isDark
+                                              ? Brightness.dark
+                                              : Brightness.light,
                                         ),
                                       ),
                                     );
@@ -702,24 +683,47 @@ Expanded(
                               const SizedBox(width: 10),
                               InkWell(
                                 onTap: () async {
+                                  final isDarkTheme =
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark;
                                   showModalBottomSheet(
                                     context: context,
                                     isScrollControlled: true,
+                                    // The sheet's own Material must be
+                                    // transparent so our rounded Container
+                                    // below can show through with its own
+                                    // corners — but that Container is what
+                                    // actually paints the opaque background,
+                                    // otherwise the sheet content floats over
+                                    // whatever is behind it with no backing.
                                     backgroundColor: Colors.transparent,
                                     builder: (ctx) {
                                       return FractionallySizedBox(
                                         heightFactor: 0.7,
-                                        child: QuizLessonPickerSheet(
-                                          onPicked: (lesson) {
-                                            Navigator.of(ctx).pop();
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) => QuizPlayScreen(
-                                                  lesson: lesson,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: isDarkTheme
+                                                ? AppColors.surfaceDark
+                                                : Colors.white,
+                                            borderRadius:
+                                                const BorderRadius.vertical(
+                                              top: Radius.circular(24),
+                                            ),
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: QuizLessonPickerSheet(
+                                            onPicked: (lesson) {
+                                              Navigator.of(ctx).pop();
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      QuizPlayScreen(
+                                                    lesson: lesson,
+                                                  ),
                                                 ),
-                                              ),
-                                            );
-                                          },
+                                              );
+                                            },
+                                          ),
                                         ),
                                       );
                                     },
@@ -730,7 +734,6 @@ Expanded(
                                     horizontal: 16,
                                     vertical: 10,
                                   ),
-
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF5B5FEF),
                                     borderRadius: BorderRadius.circular(999),
@@ -778,11 +781,8 @@ Expanded(
   }
 
   String _initialsFor(String value) {
-    final parts = value
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((p) => p.isNotEmpty)
-        .toList();
+    final parts =
+        value.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.isEmpty) return 'U';
     if (parts.length == 1) {
       return parts.first.substring(0, 1).toUpperCase();
@@ -803,7 +803,7 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : Colors.white,
+        color: isDark ? AppColors.surfaceDark : const Color(0xFFF7F8FC),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -908,7 +908,7 @@ class _SectionHeaderRow extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
+class _SearchField extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onClear;
   final ValueChanged<String> onSubmitted;
@@ -920,62 +920,147 @@ class _SearchField extends StatelessWidget {
   });
 
   @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  late FocusNode _focusNode;
+  late VoidCallback _textListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode()..addListener(() => setState(() {}));
+    _textListener = () => setState(() {});
+    widget.controller.addListener(_textListener);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_textListener);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    final surfaceColor =
+        isDark ? const Color(0xFF1C2030) : const Color(0xFFF7F8FC);
+    final borderColor = _focusNode.hasFocus
+        ? const Color(0xFF5B5FEF)
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : const Color(0xFFE3E7F0));
+    final iconBg = isDark ? const Color(0xFF2A3150) : const Color(0xFFEBEEFF);
+    final textColor = isDark ? Colors.white : const Color(0xFF182033);
+    final hintColor =
+        isDark ? Colors.white.withValues(alpha: 0.45) : const Color(0xFF7A8599);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      height: 60,
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 81, 85, 99),
-        borderRadius: BorderRadius.circular(999),
+        color: surfaceColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: borderColor,
+          width: _focusNode.hasFocus ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.06),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+          if (_focusNode.hasFocus)
+            BoxShadow(
+              color: const Color(0xFF5B5FEF)
+                  .withValues(alpha: isDark ? 0.22 : 0.14),
+              blurRadius: 18,
+              spreadRadius: 1,
+            ),
+        ],
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.access_time_rounded,
-            size: 18,
-            color: isDark
-                ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
-                : const Color(0xFF8E8E93),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onSubmitted: onSubmitted,
-              style: TextStyle(
-                color: isDark ? AppColors.textPrimaryDark : Colors.black,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: 'Search courses...',
-                hintStyle: TextStyle(
-                  color: isDark
-                      ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
-                      : const Color(0xFF8E8E93),
-                ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
+          const SizedBox(width: 14),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.search_rounded,
+                color: Color(0xFF5B5FEF),
+                size: 20,
               ),
             ),
           ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, child) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: onClear,
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: isDark
-                      ? AppColors.textSecondaryDark.withValues(alpha: 0.8)
-                      : const Color(0xFF8E8E93),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: widget.onSubmitted,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Search courses, videos or quizzes',
+                hintStyle: TextStyle(
+                  color: hintColor,
                 ),
-              );
-            },
+                isDense: true,
+              ),
+            ),
           ),
+          if (hasText)
+            IconButton(
+              splashRadius: 20,
+              icon: Icon(
+                Icons.close_rounded,
+                color: isDark ? Colors.white70 : const Color(0xFF7A8599),
+              ),
+              onPressed: widget.onClear,
+            ),
+          Container(
+            width: 44,
+            height: 44,
+            margin: const EdgeInsets.only(right: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF5B5FEF),
+                  Color(0xFF00D4FF),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF5B5FEF).withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(
+                Icons.arrow_forward_rounded,
+                color: Colors.white,
+              ),
+              onPressed: () => widget.onSubmitted(widget.controller.text),
+            ),
+          ),
+          const SizedBox(width: 2),
         ],
       ),
     );
@@ -1022,7 +1107,6 @@ class _RecentSearchRow extends StatelessWidget {
   }
 }
 
-
 class _RecommendationCard extends StatelessWidget {
   final LessonModel item;
 
@@ -1058,7 +1142,8 @@ class _RecommendationCard extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1207,8 +1292,7 @@ class _ChallengeCard extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
               color: accent,
               borderRadius: BorderRadius.circular(999),
@@ -1254,7 +1338,8 @@ class _XpProgressCardState extends State<_XpProgressCard> {
       };
     }
 
-    return LearningRepository(Supabase.instance.client).fetchUserStatsFromProgress(
+    return LearningRepository(Supabase.instance.client)
+        .fetchUserStatsFromProgress(
       userUuid: user.id,
     );
   }
@@ -1270,8 +1355,10 @@ class _XpProgressCardState extends State<_XpProgressCard> {
         final data = snapshot.data ?? const <String, dynamic>{};
         final totalXp = (data['totalXp'] as int?) ?? 0;
         final streak = (data['streak'] as int?) ?? 0;
-        final level = (data['level'] as int?) ?? XpCalculation.calculateLevel(totalXp);
-        final xpToNextLevel = (data['xpToNextLevel'] as int?) ?? XpCalculation.xpToNextLevel(totalXp);
+        final level =
+            (data['level'] as int?) ?? XpCalculation.calculateLevel(totalXp);
+        final xpToNextLevel = (data['xpToNextLevel'] as int?) ??
+            XpCalculation.xpToNextLevel(totalXp);
         final fraction = xpToNextLevel <= 0
             ? 1.0
             : (totalXp % XpCalculation.xpPerLevel) / XpCalculation.xpPerLevel;
@@ -1281,159 +1368,162 @@ class _XpProgressCardState extends State<_XpProgressCard> {
             : '$xpToNextLevel XP to Level ${level + 1}';
 
         return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.surfaceDark : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Column(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF5B5FEF),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Lvl',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                '$level',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Total XP',
+                          style: TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          totalXp.toString(),
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            color: primaryTextColor,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _GradientProgressBar(
+                            fraction: fraction.clamp(0.0, 1.0)),
+                        const SizedBox(height: 6),
+                        Text(
+                          nextLevelText,
+                          style: const TextStyle(
+                            color: Color(0xFF5B5FEF),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   Container(
-                    width: 56,
-                    height: 56,
+                    width: 50,
+                    height: 50,
                     decoration: const BoxDecoration(
-                      color: Color(0xFF5B5FEF),
+                      color: Color(0xFFFFE5D6),
                       shape: BoxShape.circle,
                     ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Lvl',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          Text(
-                            '$level',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              height: 1,
-                            ),
-                          ),
-                        ],
+                    child: const Icon(
+                      Icons.emoji_events_rounded,
+                      color: Color(0xFFFF7043),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'This Week',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: primaryTextColor,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const _WeeklyBars(),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.local_fire_department_rounded,
+                    color: Color(0xFFFF7043),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      streak >= 7
+                          ? '7-day streak — Bonus unlocked!'
+                          : '7-day streak — Keep it going!',
+                      style: const TextStyle(
+                        color: Color(0xFFFF7043),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7043),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      streak >= 7
+                          ? '+${XpCalculation.streakBonusXp} XP Bonus'
+                          : '$streak day streak',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Total XP',
-                      style: TextStyle(
-                        color: Color(0xFF8E8E93),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      totalXp.toString(),
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: primaryTextColor,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _GradientProgressBar(fraction: fraction.clamp(0.0, 1.0)),
-                    const SizedBox(height: 6),
-                    Text(
-                      nextLevelText,
-                      style: const TextStyle(
-                        color: Color(0xFF5B5FEF),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 50,
-                height: 50,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFE5D6),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.emoji_events_rounded,
-                  color: Color(0xFFFF7043),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 18),
-          Text(
-            'This Week',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: primaryTextColor,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const _WeeklyBars(),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Icon(
-                Icons.local_fire_department_rounded,
-                color: Color(0xFFFF7043),
-                size: 18,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  streak >= 7
-                      ? '7-day streak — Bonus unlocked!'
-                      : '7-day streak — Keep it going!',
-                  style: const TextStyle(
-                    color: Color(0xFFFF7043),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF7043),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  streak >= 7 ? '+${XpCalculation.streakBonusXp} XP Bonus' : '$streak day streak',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+        );
       },
     );
   }
@@ -1533,7 +1623,8 @@ class _ProfileAvatar extends StatelessWidget {
             ? Image.network(
                 imageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _InitialAvatar(initials: initials),
+                errorBuilder: (_, __, ___) =>
+                    _InitialAvatar(initials: initials),
               )
             : _InitialAvatar(initials: initials),
       ),
@@ -1619,4 +1710,3 @@ const _challengeCards = [
     xp: 40,
   ),
 ];
-

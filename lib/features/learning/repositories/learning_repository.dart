@@ -1049,6 +1049,76 @@ class LearningRepository {
     return streak;
   }
 
+  /// Fetch leaderboard from the user_xp_summary table.
+  /// Returns ranked users with their XP, level, and profile info.
+  Future<List<Map<String, dynamic>>> fetchLeaderboard({
+    int limit = 100,
+  }) async {
+    try {
+      // Fetch XP summaries ordered by total_xp DESC
+      final summaryRows = await _supabase
+          .from('user_xp_summary')
+          .select('user_id, total_xp, level, videos_watched, correct_answers, streak')
+          .order('total_xp', ascending: false)
+          .limit(limit);
+
+      // Get profile data for all users
+      final userIds = (summaryRows as List<dynamic>)
+          .map((row) => (row as Map<String, dynamic>)['user_id']?.toString())
+          .whereType<String>()
+          .toList();
+
+      final profilesRows = userIds.isEmpty
+          ? <List<dynamic>>[]
+          : await _supabase
+              .from('profiles')
+              .select('id, full_name, username, avatar_url')
+              .inFilter('id', userIds);
+
+      final profileById = <String, Map<String, dynamic>>{};
+      for (final rowAny in (profilesRows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final id = row['id']?.toString();
+        if (id == null) continue;
+        profileById[id] = row;
+      }
+
+      // Build leaderboard with ranks
+      final leaderboard = <Map<String, dynamic>>[];
+      int rank = 1;
+
+      for (final rowAny in (summaryRows as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final userId = row['user_id']?.toString();
+        if (userId == null) continue;
+
+        final profile = profileById[userId];
+        final username = (profile?['username'] as String?)?.trim();
+        final fullName = (profile?['full_name'] as String?)?.trim();
+
+        leaderboard.add({
+          'rank': rank,
+          'user_id': userId,
+          'name': (fullName != null && fullName.isNotEmpty)
+              ? fullName
+              : (username ?? userId),
+          'handle': (username != null && username.isNotEmpty)
+              ? (username.startsWith('@') ? username : '@$username')
+              : '@user',
+          'xp': (row['total_xp'] as num?)?.toInt() ?? 0,
+          'level': (row['level'] as num?)?.toInt() ?? 1,
+          'avatar_url': profile?['avatar_url']?.toString(),
+        });
+        rank++;
+      }
+
+      return leaderboard;
+    } catch (e, st) {
+      debugPrint('fetchLeaderboard error: $e\n$st');
+      return [];
+    }
+  }
+
   Future<void> _upsertUserXpSummaryFromProgress({
     required String userUuid,
   }) async {

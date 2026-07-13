@@ -80,8 +80,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _showWeekly = true;
-
   void _showSettings() {
     showModalBottomSheet(
       context: context,
@@ -212,10 +210,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: AppDimensions.spacingXxl),
 
             // ── Leaderboard Section ──
-            _LeaderboardSection(
-              showWeekly: _showWeekly,
-              onToggle: () => setState(() => _showWeekly = !_showWeekly),
-            ),
+            const _LeaderboardSection(),
             const SizedBox(height: AppDimensions.spacingXxl),
 
           ],
@@ -1213,13 +1208,8 @@ class _CategoryChipCard extends StatelessWidget {
 // ── Leaderboard Section
 
 class _LeaderboardSection extends StatelessWidget {
-  final bool showWeekly;
-  final VoidCallback onToggle;
+  const _LeaderboardSection();
 
-  const _LeaderboardSection({
-    required this.showWeekly,
-    required this.onToggle,
-  });
 
   @override
   Widget build(BuildContext context) {
@@ -1254,40 +1244,22 @@ class _LeaderboardSection extends StatelessWidget {
                 letterSpacing: -0.2,
               ),
             ),
-            const Spacer(),
-            // Toggle
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceFor(brightness),
-                borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-                border: Border.all(
-                  color: AppColors.textSecondaryFor(brightness).withValues(alpha: 0.1),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ToggleOption(
-                    label: 'Weekly',
-                    isSelected: showWeekly,
-                    onTap: showWeekly ? null : onToggle,
-                  ),
-                  _ToggleOption(
-                    label: 'All Time',
-                    isSelected: !showWeekly,
-                    onTap: showWeekly ? onToggle : null,
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
         const SizedBox(height: AppDimensions.spacingLg),
 
         FutureBuilder<List<Map<String, dynamic>>>(
           future: LearningRepository(Supabase.instance.client)
-              .fetchLeaderboardFromProgress(weekly: showWeekly, limit: 1000),
+              .fetchLeaderboard(limit: 1000),
           builder: (context, snapshot) {
+            // Error state
+            if (snapshot.hasError) {
+              return _NoRecordsCard(
+                message: 'Unable to load leaderboard. Please try again.',
+              );
+            }
+
+            // Loading state
             if (!snapshot.hasData) {
               return const SizedBox(
                 height: 120,
@@ -1301,6 +1273,7 @@ class _LeaderboardSection extends StatelessWidget {
               return const _NoRecordsCard(message: 'no records');
             }
 
+            // Find current user's entry in full leaderboard
             final currentUserRow = user == null
                 ? null
                 : allRows.cast<Map<String, dynamic>?>().firstWhere(
@@ -1311,10 +1284,6 @@ class _LeaderboardSection extends StatelessWidget {
             final currentXp = (currentUserRow?['xp'] as num?)?.toInt() ?? 0;
             final currentLevel = (currentUserRow?['level'] as num?)?.toInt() ??
                 XpCalculation.calculateLevel(currentXp);
-
-            final currentUserRowIndex = user == null
-                ? -1
-                : rows.indexWhere((r) => (r['user_id']?.toString() ?? '') == user.id);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1408,22 +1377,6 @@ class _LeaderboardSection extends StatelessWidget {
                     isTop3: rank <= 3,
                   );
                 }),
-                if (user != null && currentUserRowIndex < 0 && currentRank > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppDimensions.spacingMd),
-                    child: _LeaderboardRow(
-                      entry: LeaderboardEntry(
-                        rank: currentRank,
-                        name: 'You',
-                        handle: '@you',
-                        xp: currentXp,
-                        level: currentLevel,
-                        isCurrentUser: true,
-                        trendingUp: true,
-                      ),
-                      isTop3: currentRank <= 3,
-                    ),
-                  ),
               ],
             );
           },
@@ -1432,49 +1385,6 @@ class _LeaderboardSection extends StatelessWidget {
 
 
       ],
-    );
-  }
-}
-
-class _ToggleOption extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback? onTap;
-
-  const _ToggleOption({
-    required this.label,
-    required this.isSelected,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 7,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primaryFor(brightness).withValues(alpha: 0.2)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusFull),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: isSelected
-                ? AppColors.primaryFor(brightness)
-                : AppColors.textSecondaryFor(brightness),
-          ),
-        ),
-      ),
     );
   }
 }

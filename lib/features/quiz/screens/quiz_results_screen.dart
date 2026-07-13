@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../learning/models/lesson_model.dart';
-import '../../learning/repositories/xp_calculation.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_dimensions.dart';
+import '../../../core/constants/app_typography.dart';
+import '../../../core/widgets/floating_glow.dart';
+import '../../../core/widgets/glass_widgets.dart';
+import '../../../core/widgets/main_app_shell.dart';
 
 class QuizResultsScreen extends StatefulWidget {
   final LessonModel lesson;
@@ -24,6 +29,25 @@ class QuizResultsScreen extends StatefulWidget {
 
 class _QuizResultsScreenState extends State<QuizResultsScreen> {
   bool _savedAttempt = false;
+
+  int get _safeTotal => widget.total <= 0 ? 0 : widget.total;
+
+  double get _percentage {
+    if (_safeTotal == 0) return 0;
+    return (widget.score / _safeTotal) * 100;
+  }
+
+  bool get _isPerfect => _safeTotal != 0 && widget.score == _safeTotal;
+
+  String get _motivationalMessage {
+    final p = _percentage;
+    if (_safeTotal == 0) return 'Let’s get started—take another quiz!';
+    if (_isPerfect) return 'Perfect score! Outstanding work ✨';
+    if (p >= 80) return 'Amazing! You’re really on a roll 🚀';
+    if (p >= 50) return 'Nice progress—keep improving 📈';
+    return 'Good effort—review and try again 💪';
+  }
+
 
   @override
   void initState() {
@@ -130,43 +154,396 @@ class _QuizResultsScreenState extends State<QuizResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? Colors.black : Colors.white;
-    final text = isDark ? Colors.white : Colors.black;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+
+    final background = AppColors.backgroundFor(brightness);
+    final textPrimary = AppColors.textPrimaryFor(brightness);
+    final textSecondary = AppColors.textSecondaryFor(brightness);
+
+    final heroGradient = isDark ? AppColors.primaryGradientDark : AppColors.primaryGradient;
+    final percentageRounded = _percentage.round().clamp(0, 100);
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: background,
       appBar: AppBar(
-        backgroundColor: bg,
+        backgroundColor: background,
         elevation: 0,
-        foregroundColor: text,
-        title: const Text('Quiz Results'),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Score', style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 18)),
-              const SizedBox(height: 10),
-              Text('${widget.score} / ${widget.total}', style: TextStyle(color: text, fontWeight: FontWeight.w900, fontSize: 40)),
-              const SizedBox(height: 14),
-              Text('Correct answers: ${widget.score}', style: TextStyle(color: text.withValues(alpha: 0.85), fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              Text('Total questions: ${widget.total}', style: TextStyle(color: text.withValues(alpha: 0.85), fontWeight: FontWeight.w700)),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-                  child: const Text('Back to Home'),
-                ),
-              ),
-            ],
-          ),
+        foregroundColor: textPrimary,
+        title: Text(
+          'Quiz Results',
+          style: AppTypography.headlineSmall(brightness),
         ),
       ),
+      body: SafeArea(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: percentageRounded.toDouble()),
+          duration: const Duration(milliseconds: 900),
+          curve: Curves.easeOutCubic,
+          builder: (context, animatedPercent, _) {
+            final animatedP = animatedPercent.clamp(0, 100);
+
+            final successColor = isDark ? const Color(0xFF00C781) : AppColors.success;
+            final badgeText = _motivationalMessage;
+
+            return Stack(
+              children: [
+                Positioned(
+                  top: 40,
+                  left: -30,
+                  child: FloatingGlow(
+                    color: isDark ? const Color(0xFF7B61FF) : AppColors.primaryLight,
+                    size: 220,
+                    opacity: 0.35,
+                  ),
+                ),
+                Positioned(
+                  top: 120,
+                  right: -40,
+                  child: FloatingGlow(
+                    color: isDark ? const Color(0xFF00E5FF) : AppColors.secondaryLight,
+                    size: 200,
+                    opacity: 0.30,
+                  ),
+                ),
+                // Scrollable content on top, fixed "Back to Home" button pinned
+                // to the bottom of the screen below it.
+                Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(height: 6),
+
+                            // Gradient hero header
+                            Container(
+                              padding: const EdgeInsets.all(AppDimensions.spacingLg),
+                              decoration: BoxDecoration(
+                                gradient: heroGradient,
+                                borderRadius: BorderRadius.circular(AppDimensions.cardRadiusLg),
+                                boxShadow: AppDimensions.shadowLg(Colors.black.withValues(alpha: 0.12)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Center(
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    widget.lesson.title,
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.headlineLarge(brightness).copyWith(
+                                      color: Colors.white,
+                                    ),
+                                    // Show the full lesson title instead of
+                                    // truncating it with an ellipsis.
+                                    softWrap: true,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    badgeText,
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.bodyMedium(brightness).copyWith(
+                                      color: Colors.white.withValues(alpha: 0.9),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Circular percentage indicator + glass score card
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 6,
+                                  child: Center(
+                                    child: _CircularPercentage(
+                                      brightness: brightness,
+                                      percent: animatedP / 100,
+                                      textPrimary: textPrimary,
+                                      textSecondary: textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  flex: 7,
+                                  child: GlassCard(
+                                    padding: const EdgeInsets.all(AppDimensions.spacingMd),
+                                    radius: AppDimensions.cardRadiusLg,
+                                    tintColor: Colors.white,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'Score',
+                                          style: AppTypography.headlineSmall(brightness),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '${widget.score} / ${widget.total}',
+                                          style: AppTypography.displayMedium(brightness).copyWith(
+                                            color: textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          'Percentage',
+                                          style: AppTypography.bodySmall(brightness).copyWith(color: textSecondary),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${animatedP.round()}%',
+                                          style: AppTypography.displaySmall(brightness).copyWith(
+                                            color: textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            color: successColor.withValues(alpha: isDark ? 0.16 : 0.12),
+                                            borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+                                            border: Border.all(color: successColor.withValues(alpha: 0.35)),
+                                          ),
+                                          child: Text(
+                                            _isPerfect ? 'Perfect run' : 'Keep going',
+                                            style: TextStyle(
+                                              color: successColor,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Animated statistic cards
+                            _StatGrid(
+                              brightness: brightness,
+                              correct: widget.score,
+                              wrong: _safeTotal - widget.score,
+                              total: _safeTotal,
+                            ),
+
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Back to Home button, pinned to the bottom of the screen.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: GradientedButton(
+                        label: 'Back to Home',
+                        gradient: heroGradient,
+                        onTap: () {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const MainAppShell()),
+                            (route) => false,
+                          );
+                        },
+                        height: AppDimensions.buttonHeightLg,
+                        icon: Icons.home_outlined,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _CircularPercentage extends StatelessWidget {
+  final Brightness brightness;
+  final double percent; // 0..1
+  final Color textPrimary;
+  final Color textSecondary;
+
+  const _CircularPercentage({
+    required this.brightness,
+    required this.percent,
+    required this.textPrimary,
+    required this.textSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = brightness == Brightness.dark;
+    final primary = isDark ? AppColors.primaryDark : AppColors.primaryLight;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxSide = (constraints.maxWidth < constraints.maxHeight
+                ? constraints.maxWidth
+                : constraints.maxHeight)
+            .clamp(80.0, 170.0);
+
+        final strokeWidth = (maxSide * 0.07).clamp(8.0, 14.0);
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: SizedBox(
+            width: maxSide,
+            height: maxSide,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: maxSide,
+                  height: maxSide,
+                  child: CircularProgressIndicator(
+                    value: percent,
+                    strokeWidth: strokeWidth,
+                    backgroundColor:
+                        Colors.white.withValues(alpha: isDark ? 0.10 : 0.25),
+                    valueColor: AlwaysStoppedAnimation<Color>(primary),
+                  ),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '${(percent * 100).round()}%',
+                      style: AppTypography.displayMedium(brightness)
+                          .copyWith(color: textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Completion',
+                      style: AppTypography.bodySmall(brightness)
+                          .copyWith(color: textSecondary),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatGrid extends StatelessWidget {
+  final Brightness brightness;
+  final int correct;
+  final int wrong;
+  final int total;
+
+  const _StatGrid({
+    required this.brightness,
+    required this.correct,
+    required this.wrong,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = brightness == Brightness.dark;
+    final textPrimary = AppColors.textPrimaryFor(brightness);
+    final textSecondary = AppColors.textSecondaryFor(brightness);
+
+    final data = [
+      {
+        'label': 'Correct',
+        'value': correct,
+        'icon': Icons.check_circle_outline,
+        'color': AppColors.success,
+      },
+      {
+        'label': 'Wrong',
+        'value': wrong < 0 ? 0 : wrong,
+        'icon': Icons.cancel_outlined,
+        'color': AppColors.error,
+      },
+      {
+        'label': 'Total',
+        'value': total,
+        'icon': Icons.quiz_outlined,
+        'color': isDark ? const Color(0xFF7B61FF) : AppColors.primaryLight,
+      },
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: 3,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        // Slightly taller cells (was 1.15) so the icon + two lines of text
+        // no longer overflow the card's vertical space.
+        childAspectRatio: 0.92,
+      ),
+      itemBuilder: (context, i) {
+        final d = data[i];
+        final color = d['color'] as Color;
+
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: (d['value'] as int).toDouble()),
+          duration: Duration(milliseconds: 650 + i * 120),
+          curve: Curves.easeOutCubic,
+          builder: (context, v, _) {
+            return GlassCard(
+              radius: AppDimensions.cardRadiusMd,
+              tintColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withValues(alpha: isDark ? 0.16 : 0.10),
+                      border: Border.all(color: color.withValues(alpha: 0.35)),
+                    ),
+                    child: Icon(
+                      d['icon'] as IconData,
+                      color: color,
+                      size: 17,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    v.round().toString(),
+                    style: AppTypography.displaySmall(brightness).copyWith(color: textPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    d['label'] as String,
+                    style: AppTypography.bodySmall(brightness).copyWith(color: textSecondary),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -5,8 +5,6 @@ class QuizPromptBuilder {
     required LessonModel lesson,
     required int questionCount,
   }) {
-    final shortAnswerCount = (questionCount * 0.3).round().clamp(2, questionCount);
-    final mcqCount = questionCount - shortAnswerCount;
     final difficulty = lesson.difficultyLevel.toLowerCase().trim();
 
     return '''
@@ -34,14 +32,12 @@ Generate a quiz that follows these rules:
 - No markdown.
 - No extra text.
 - Exactly $questionCount questions.
-- About 70% MCQ and 30% short answer.
-- Target $mcqCount MCQ questions and $shortAnswerCount short answer questions.
+- ALL questions must be multiple choice (type: "mcq"). Do NOT generate short-answer or typing questions.
+- Each question must have exactly 4 options and exactly one correct answer that matches one of the options exactly.
 - Questions must test understanding, not memorization.
 - Avoid duplicate or vague questions.
 - Match the lesson difficulty level: easy, medium, or hard.
-- For short answers, include accepted_answers with multiple acceptable variants.
-- For MCQs, provide exactly 4 options and one correct answer.
-- Every question must include an explanation.
+- Every question must include a short explanation (1-2 sentences) for why the answer is correct.
 
 JSON schema:
 {
@@ -53,13 +49,6 @@ JSON schema:
       "type": "mcq",
       "options": ["...", "...", "...", "..."],
       "correct_answer": "...",
-      "explanation": "..."
-    },
-    {
-      "question": "...",
-      "type": "short_answer",
-      "correct_answer": "...",
-      "accepted_answers": ["...", "..."],
       "explanation": "..."
     }
   ]

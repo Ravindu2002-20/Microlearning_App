@@ -1,22 +1,32 @@
-# TODO — AI Quiz Feature
+# TODO - user_xp_summary leaderboard refactor
 
-- [ ] Create quiz feature models: `QuizModel`, `QuizQuestionModel` with `fromJson()`, `toJson()`, `toInsertJson()`.
-- [ ] Create `QuizRepository` with `getOrGenerateQuiz(LessonModel lesson)`:
-  - [ ] Check `quiz_questions` by `lesson_id == lesson.id`
-  - [ ] If found: build `QuizModel` from downloaded questions
-  - [ ] If not found: call `GeminiService.generateReply()` with the exact prompt, parse/validate JSON (retry once)
-  - [ ] Return `QuizModel` (and insert generated questions if repository is expected to do so via `toInsertJson()`).
-- [ ] Wire Home dashboard Quiz section “Start” button:
-  - [ ] Choose a lesson (simple approach: pick first from approved lessons or open a simple modal list)
-  - [ ] Navigate to `QuizPlayScreen` with the selected lesson.
-- [ ] Implement `QuizPlayScreen` (one question at a time):
-  - [ ] Loading + progress (Question X of 5)
-  - [ ] MCQ option cards (4 options)
-  - [ ] Free-text questions with custom `TextInputFormatter` (max 3 words)
-  - [ ] Disable Next until answer selected
-  - [ ] Submit answer, show correct/incorrect styling + explanation, then auto-advance
-- [ ] Implement `QuizResultsScreen` showing score, correct answers, total questions + Back to Home.
-- [ ] On completion, insert one row into `quiz_attempts` with `answers` JSON payload.
-- [ ] Add TODO comment about quiz XP integration depending on DB CHECK constraint extension for `content_type='quiz'`.
+## Step 1
+Update `quiz_results_screen.dart` upsert into `user_xp_summary` to include:
+- `videos_watched`
+- `correct_answers`
+- `total_xp`, `streak`, `level`, `xp_updated_at`
 
+## Step 2
+Update `learning_repository.dart` so that when a lesson is marked completed (`logLessonCompletion`) it also:
+- recalculates streak, videos_watched, correct_answers
+- computes `total_xp` and `level`
+- upserts into `user_xp_summary` onConflict: `user_id`
+
+## Step 3
+Replace `fetchLeaderboardFromProgress` with new `fetchLeaderboard({int limit = 100})` that:
+- selects from `user_xp_summary` (user_id, total_xp, level)
+- joins `profiles` for display name + avatar
+- orders by `total_xp DESC`
+- computes rank client-side (or SQL)
+- returns ALL users (caller can slice)
+
+## Step 4
+Update `profile_screen.dart` `_LeaderboardSection`:
+- call `fetchLeaderboard`
+- show user with 0 XP if missing in summary
+- show error UI if fetch fails
+- remove fallback logic that only displayed current user
+
+## Step 5
+Run `flutter analyze` and fix any compile issues.
 

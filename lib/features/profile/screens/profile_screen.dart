@@ -17,6 +17,7 @@ import '../../lessons/screens/lesson_detail_screen.dart';
 import '../../admin/screens/admin_review_screen.dart';
 import '../../../core/services/admin_service.dart';
 import 'edit_profile_screen.dart';
+import 'learning_preferences_screen.dart';
 
 
 
@@ -1223,6 +1224,7 @@ class _LeaderboardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
+    final user = Supabase.instance.client.auth.currentUser;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1284,7 +1286,7 @@ class _LeaderboardSection extends StatelessWidget {
 
         FutureBuilder<List<Map<String, dynamic>>>(
           future: LearningRepository(Supabase.instance.client)
-              .fetchLeaderboardFromProgress(weekly: showWeekly, limit: 10),
+              .fetchLeaderboardFromProgress(weekly: showWeekly, limit: 1000),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const SizedBox(
@@ -1293,37 +1295,136 @@ class _LeaderboardSection extends StatelessWidget {
               );
             }
 
-            final rows = snapshot.data!;
+            final allRows = snapshot.data!;
+            final rows = allRows.take(10).toList();
             if (rows.isEmpty) {
               return const _NoRecordsCard(message: 'no records');
             }
 
-            final user = Supabase.instance.client.auth.currentUser;
+            final currentUserRow = user == null
+                ? null
+                : allRows.cast<Map<String, dynamic>?>().firstWhere(
+                    (r) => (r?['user_id']?.toString() ?? '') == user.id,
+                    orElse: () => null,
+                  );
+            final currentRank = (currentUserRow?['rank'] as num?)?.toInt() ?? 0;
+            final currentXp = (currentUserRow?['xp'] as num?)?.toInt() ?? 0;
+            final currentLevel = (currentUserRow?['level'] as num?)?.toInt() ??
+                XpCalculation.calculateLevel(currentXp);
+
+            final currentUserRowIndex = user == null
+                ? -1
+                : rows.indexWhere((r) => (r['user_id']?.toString() ?? '') == user.id);
 
             return Column(
-              children: rows.map((r) {
-                final rank = (r['rank'] as num?)?.toInt() ?? 0;
-            final name = r['name']?.toString() ?? '';
-                final handle = (r['handle'] as String?)?.toString() ?? '@user';
-                final xp = (r['xp'] as num?)?.toInt() ?? 0;
-                final uid = (r['user_id'] as String?)?.toString();
-                final level = (r['level'] as int?) ?? XpCalculation.calculateLevel(xp);
-
-                final isCurrentUser = user != null && uid != null && uid == user.id;
-
-                return _LeaderboardRow(
-                  entry: LeaderboardEntry(
-                    rank: rank,
-                    name: name,
-                    handle: handle,
-                    xp: xp,
-                    level: level,
-                    isCurrentUser: isCurrentUser,
-                    trendingUp: true,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (user != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppDimensions.spacingLg),
+                    margin: const EdgeInsets.only(bottom: AppDimensions.spacingMd),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceFor(brightness),
+                      borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
+                      border: Border.all(
+                        color: AppColors.textSecondaryFor(brightness)
+                            .withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: AppColors.aiGradient,
+                          ),
+                          child: const Icon(
+                            Icons.person_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: AppDimensions.spacingMd),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your rank',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textSecondaryFor(brightness),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                currentRank > 0 ? '#$currentRank' : 'Not ranked yet',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimaryFor(brightness),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$currentXp XP | Lv $currentLevel',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondaryFor(brightness),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  isTop3: rank <= 3,
-                );
-              }).toList(),
+
+                ...rows.map((r) {
+                  final rank = (r['rank'] as num?)?.toInt() ?? 0;
+                  final name = r['name']?.toString() ?? '';
+                  final handle = (r['handle'] as String?)?.toString() ?? '@user';
+                  final xp = (r['xp'] as num?)?.toInt() ?? 0;
+                  final uid = (r['user_id'] as String?)?.toString();
+                  final level = (r['level'] as int?) ?? XpCalculation.calculateLevel(xp);
+
+                  final isCurrentUser = user != null && uid != null && uid == user.id;
+
+                  return _LeaderboardRow(
+                    entry: LeaderboardEntry(
+                      rank: rank,
+                      name: name,
+                      handle: handle,
+                      xp: xp,
+                      level: level,
+                      isCurrentUser: isCurrentUser,
+                      trendingUp: true,
+                    ),
+                    isTop3: rank <= 3,
+                  );
+                }),
+                if (user != null && currentUserRowIndex < 0 && currentRank > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppDimensions.spacingMd),
+                    child: _LeaderboardRow(
+                      entry: LeaderboardEntry(
+                        rank: currentRank,
+                        name: 'You',
+                        handle: '@you',
+                        xp: currentXp,
+                        level: currentLevel,
+                        isCurrentUser: true,
+                        trendingUp: true,
+                      ),
+                      isTop3: currentRank <= 3,
+                    ),
+                  ),
+              ],
             );
           },
         ),
@@ -1628,8 +1729,6 @@ class _SettingsSheet extends StatelessWidget {
     final brightness = Theme.of(context).brightness;
     final settings = [
       _SettingItem(Icons.person_outline, 'Edit Profile'),
-      _SettingItem(Icons.notifications_outlined, 'Notifications'),
-      _SettingItem(Icons.lock_outline, 'Privacy'),
       _SettingItem(Icons.tune_outlined, 'Learning Preferences'),
     ];
 
@@ -1996,6 +2095,13 @@ class _SettingsTile extends StatelessWidget {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const EditProfileScreen(),
+            ),
+          );
+        } else if (item.label == 'Learning Preferences') {
+          if (!context.mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const LearningPreferencesScreen(),
             ),
           );
         }

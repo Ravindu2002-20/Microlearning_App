@@ -1,33 +1,45 @@
 Resolving dependencies...
 Downloading packages...
-  app_links 7.0.0 (7.1.2 available)
-  app_links_platform_interface 2.0.2 (2.0.3 available)
+  app_links 7.0.0 (7.2.1 available)
+  app_links_platform_interface 2.0.2 (2.0.4 available)
   chewie 1.13.1 (1.14.1 available)
+  connectivity_plus 7.1.1 (7.2.0 available)
+  cross_file 0.3.5+2 (0.3.5+4 available)
   file_picker 8.3.7 (11.0.2 available)
+  flutter_dotenv 5.2.1 (6.0.1 available)
   flutter_riverpod 2.6.1 (3.3.2 available)
-  functions_client 2.6.0 (2.6.1 available)
-  gotrue 2.21.0 (2.22.0 available)
-  hooks 2.0.0 (2.0.2 available)
+  functions_client 2.6.0 (2.6.4 available)
+  gotrue 2.21.0 (2.26.0 available)
+  hooks 2.0.0 (2.1.0 available)
+  image_picker 1.2.2 (1.2.3 available)
   image_picker_android 0.8.13+17 (0.8.13+19 available)
   matcher 0.12.19 (0.12.20 available)
-  meta 1.17.0 (1.18.3 available)
+  meta 1.17.0 (1.19.0 available)
   package_config 2.2.0 (3.0.0 available)
-  package_info_plus 9.0.1 (10.1.0 available)
+  package_info_plus 9.0.1 (10.2.0 available)
   package_info_plus_platform_interface 3.2.1 (4.1.0 available)
-  postgrest 2.7.1 (2.7.2 available)
-  realtime_client 2.7.4 (2.8.0 available)
+  path_provider_linux 2.2.1 (2.2.2 available)
+  postgrest 2.7.1 (2.8.0 available)
+  realtime_client 2.7.4 (2.11.0 available)
+  record_use 0.6.0 (1.0.0 available)
   riverpod 2.6.1 (3.3.2 available)
-  share_plus 10.1.4 (13.1.0 available)
+  sensors_plus 7.0.0 (7.1.0 available)
+  sensors_plus_platform_interface 2.0.1 (2.0.2 available)
+  share_plus 10.1.4 (13.2.0 available)
   share_plus_platform_interface 5.0.2 (7.1.0 available)
   shared_preferences_android 2.4.23 (2.4.26 available)
-  storage_client 2.5.6 (2.5.7 available)
-  supabase 2.12.2 (2.13.0 available)
-  supabase_flutter 2.14.2 (2.15.0 available)
-  test_api 0.7.10 (0.7.12 available)
+  storage_client 2.5.6 (2.6.0 available)
+  supabase 2.12.2 (2.14.0 available)
+  supabase_flutter 2.14.2 (2.16.0 available)
+  test_api 0.7.10 (0.7.13 available)
   url_launcher_android 6.3.30 (6.3.32 available)
   vector_math 2.2.0 (2.4.0 available)
-  video_player_android 2.9.5 (2.9.6 available)
+  video_player 2.11.1 (2.12.0 available)
+  video_player_android 2.9.5 (2.11.0 available)
+  video_player_avfoundation 2.9.7 (2.11.0 available)
+  video_player_platform_interface 6.7.0 (6.9.0 available)
   wakelock_plus 1.5.2 (1.6.1 available)
+  webview_flutter 4.14.0 (4.14.1 available)
   webview_flutter_android 4.12.0 (4.13.0 available)
   webview_flutter_wkwebview 3.25.1 (3.26.0 available)
   win32 5.15.0 (6.3.0 available)
@@ -35,9 +47,24 @@ Downloading packages...
   yet_another_json_isolate 2.1.0 (2.1.1 available)
   youtube_player_flutter 9.1.3 (10.0.1 available)
 Got dependencies!
-34 packages have newer versions incompatible with dependency constraints.
+46 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
 Analyzing Microlearning_App...                                  
 
-warning - A value for optional parameter 'key' isn't ever given - lib\main.dart:197:28 - unused_element_parameter
+   info - Don't use 'BuildContext's across async gaps - lib\features\admin\screens\admin_profile_screen.dart:274:42 - use_build_context_synchronously
+warning - The stack trace variable 'st' isn't used and can be removed - lib\features\ai_bot\controllers\ai_chat_controller.dart:137:17 - unused_catch_stack
+warning - Unused import: '../../../core/widgets/glass_widgets.dart' - lib\features\ai_bot\screens\ai_bot_screen.dart:6:8 - unused_import
+   info - Don't use 'BuildContext's across async gaps - lib\features\feed\screens\main_swipe_feed_screen.dart:258:26 - use_build_context_synchronously
+warning - The value of the field '_isPlaying' isn't used - lib\features\feed\screens\main_swipe_feed_screen.dart:483:8 - unused_field
+warning - The declaration '_ChallengeCard' isn't referenced - lib\features\home\screens\home_screen.dart:1138:7 - unused_element
+warning - The declaration '_challengeCards' isn't referenced - lib\features\home\screens\home_screen.dart:1599:7 - unused_element
+   info - Unnecessary braces in a string interpolation - lib\features\profile\screens\profile_screen.dart:505:47 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\features\profile\screens\profile_screen.dart:513:14 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\features\profile\screens\profile_screen.dart:516:51 - unnecessary_brace_in_string_interps
+warning - A value for optional parameter 'key' isn't ever given - lib\features\profile\screens\profile_screen.dart:801:39 - unused_element_parameter
+warning - A value for optional parameter 'key' isn't ever given - lib\features\profile\screens\profile_screen.dart:848:30 - unused_element_parameter
+warning - The declaration '_thumbnailForLesson' isn't referenced - lib\features\profile\screens\profile_screen.dart:1094:10 - unused_element
+warning - The declaration '_CategoryChipCard' isn't referenced - lib\features\profile\screens\profile_screen.dart:1167:7 - unused_element
+warning - The declaration '_DividerWithDot' isn't referenced - lib\features\profile\screens\profile_screen.dart:1381:7 - unused_element
+   info - Don't use 'BuildContext's across async gaps - lib\features\profile\screens\profile_screen.dart:1919:48 - use_build_context_synchronously
 

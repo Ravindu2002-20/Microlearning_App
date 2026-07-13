@@ -29,8 +29,86 @@ class VideoUploadResult {
   bool get isSuccess => path != null;
 }
 
+/// Learning preferences helper model
+/// (kept outside the repository class because Dart disallows
+/// declaring classes inside other classes)
+class LearningPreferencesResult {
+  final List<String> availableCategories;
+  final List<String> selectedCategories;
+
+  const LearningPreferencesResult({
+    required this.availableCategories,
+    required this.selectedCategories,
+  });
+}
+
 class LearningRepository {
   final SupabaseClient _supabase;
+
+
+  /// Returns categories to show in the UI + currently selected categories.
+  /// Reads from:
+  /// - user_preferences.selected_categories (user-specific)
+  /// - lessons.category (fallback for available categories)
+  Future<LearningPreferencesResult> fetchLearningPreferences({
+    required String userUuid,
+  }) async {
+    try {
+      final prefsRow = await _supabase
+          .from('user_preferences')
+          .select('selected_categories')
+          .eq('user_id', userUuid)
+          .maybeSingle();
+
+      final selected =
+          (prefsRow?['selected_categories'] as List<dynamic>?)?.cast<String>() ??
+              <String>[];
+
+      // Available categories: derive from lessons table.
+      final catRows = await _supabase
+          .from('lessons')
+          .select('category')
+          .not('category', 'is', null);
+
+      final categories = <String>{};
+      for (final rowAny in (catRows as List<dynamic>)) {
+        final cat = (rowAny as Map<String, dynamic>)['category']?.toString();
+        if (cat == null) continue;
+        final trimmed = cat.trim();
+        if (trimmed.isEmpty) continue;
+        categories.add(trimmed);
+      }
+
+      return LearningPreferencesResult(
+        availableCategories: categories.toList()..sort(),
+        selectedCategories: selected,
+      );
+    } catch (e) {
+      debugPrint('fetchLearningPreferences error: $e');
+      return const LearningPreferencesResult(
+        availableCategories: [],
+        selectedCategories: [],
+      );
+    }
+  }
+
+  /// Saves selected categories for current user.
+  Future<void> updateLearningPreferences({
+    required String userUuid,
+    required List<String> selectedCategories,
+  }) async {
+    try {
+      await _supabase.from('user_preferences').upsert({
+        'user_id': userUuid,
+        'selected_categories': selectedCategories,
+      });
+    } catch (e) {
+      debugPrint('updateLearningPreferences error: $e');
+      rethrow;
+    }
+  }
+
+
 
   // Offline cache stores only Storage lessons (LessonModel).
   // YouTube videos are always fetched fresh.
@@ -405,6 +483,9 @@ class LearningRepository {
         'last_accessed': DateTime.now().toIso8601String(),
         'is_completed': true,
       });
+
+      await _upsertUserXpSummaryFromProgress(userUuid: userUuid);
+
     } catch (e, st) {
       debugPrint('logLessonCompletion error: $e\n$st');
     }
@@ -968,7 +1049,76 @@ class LearningRepository {
     return streak;
   }
 
+  Future<void> _upsertUserXpSummaryFromProgress({
+    required String userUuid,
+  }) async {
+    try {
+      final progressRows = await _supabase
+          .from('user_progress')
+          .select('lesson_id,last_accessed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true);
+
+      final completed = (progressRows as List<dynamic>)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
+
+      final completedLessonIds = completed
+          .map((row) => row['lesson_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      final videosWatched = completedLessonIds.length;
+
+      final completionDays = completed
+          .map((row) {
+            final raw = row['last_accessed'];
+            if (raw == null) return null;
+            final parsed = DateTime.tryParse(raw.toString());
+            if (parsed == null) return null;
+            return DateTime(parsed.year, parsed.month, parsed.day);
+          })
+          .whereType<DateTime>()
+          .toSet();
+
+      final streak = _calculateStreak(completionDays);
+
+      final quizRows = await _supabase
+          .from('quiz_attempts')
+          .select('score')
+          .eq('user_id', userUuid);
+
+      final correctAnswers = (quizRows as List<dynamic>).fold<int>(0, (sum, row) {
+        final score = (row as Map<String, dynamic>)['score'];
+        if (score == null) return sum;
+        return sum + (score as num).toInt();
+      });
+
+      final totalXp = XpCalculation.calculateTotalXp(
+        watchedVideoCount: videosWatched,
+        correctAnswerCount: correctAnswers,
+        streak: streak,
+      );
+
+      final level = XpCalculation.calculateLevel(totalXp);
+
+      await _supabase.from('user_xp_summary').upsert({
+        'user_id': userUuid,
+        'total_xp': totalXp,
+        'videos_watched': videosWatched,
+        'correct_answers': correctAnswers,
+        'streak': streak,
+        'level': level,
+        'xp_updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (e, st) {
+      debugPrint('_upsertUserXpSummaryFromProgress error: $e\n$st');
+    }
+  }
+
   // ── Private helpers ───────────────────────────────────────────────────────
+
 
   Future<List<LessonModel>> _fetchFromSupabase({
 

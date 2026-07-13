@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../ai_bot/services/gemini_service.dart';
 import '../../learning/models/lesson_item.dart';
 import '../../learning/models/lesson_model.dart';
-import '../../learning/models/video_model.dart';
 
 import '../../learning/repositories/learning_repository.dart';
 
@@ -60,12 +59,9 @@ class VideoRecommendationService {
   }) async {
     // 1) Load user details (age + interesting fields).
     final userPrefs = await _fetchUserPrefs(userUuid);
-    final userProfile = await _fetchUserProfile(userUuid);
+    final interesting = extractInterestingFields(userPrefs);
 
-    final age = (userProfile['age'] ?? userProfile['birth_year'] ?? userPrefs['age'])?.toString();
-    final interesting = extractInterestingFields(userPrefs, userProfile);
-
-    // 2) Load candidate videos from the existing lesson feed.
+    // 2) Load candidate videos from the lessons table / existing lesson feed.
     final candidates = await _loadCandidates(candidatePool);
 
     if (candidates.isEmpty) return const [];
@@ -73,7 +69,6 @@ class VideoRecommendationService {
     // 3) Try Gemini first, but never let that block the home feed.
     final prompt = _buildRecommendationPrompt(
       user: {
-        'age': age,
         'interesting': interesting,
         'topN': topN,
       },
@@ -125,45 +120,63 @@ class VideoRecommendationService {
   }
 
   Future<List<LessonModel>> _loadCandidates(int candidatePool) async {
-    try {
-      final fromRepo = (await _learningRepository.getAllLessonItems())
-          .take(candidatePool)
-          .toList();
+      try {
+        final combined = <LessonModel>[];
 
-      if (fromRepo.isNotEmpty) {
-        return fromRepo.map(lessonModelFromItem).toList();
+      try {
+        final fromRepo = await _learningRepository.getAllLessonItems();
+        combined.addAll(
+          fromRepo.take(candidatePool).map(lessonModelFromItem),
+        );
+      } catch (e, st) {
+        debugPrint('Failed to load repository candidates: $e\n$st');
       }
 
-      final lessonRows = await _supabaseClient
-          .from('lessons')
-          .select()
-          .eq('status', 'approved')
-          .eq('is_published', true)
-          .order('created_at', ascending: false)
-          .limit(candidatePool);
+      try {
+        final lessonRows = await _supabaseClient
+            .from('lessons')
+            .select()
+            .eq('status', 'approved')
+            .eq('is_published', true)
+            .order('created_at', ascending: false)
+            .limit(candidatePool);
 
-      final lessonCandidates = (lessonRows as List<dynamic>)
-          .map((row) => row as Map<String, dynamic>)
-          .map(_lessonModelFromSupabaseRow)
-          .toList();
+        combined.addAll(
+          (lessonRows as List<dynamic>)
+              .map((row) => row as Map<String, dynamic>)
+              .map(_lessonModelFromSupabaseRow),
+        );
+      } catch (e, st) {
+        debugPrint('Failed to load lesson candidates: $e\n$st');
+      }
 
-      final videoRows = await _supabaseClient
-          .from('videos')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(candidatePool);
+      combined
+        ..removeWhere((v) => v.id.trim().isEmpty)
+        ..shuffle();
 
-      final videoCandidates = (videoRows as List<dynamic>)
-          .map((row) => row as Map<String, dynamic>)
-          .map(_lessonModelFromVideoRow)
-          .toList();
+      if (combined.isNotEmpty) {
+        return combined;
+      }
 
-      final combined = [...lessonCandidates, ...videoCandidates];
-      combined.shuffle();
+      // Final fallback: ignore filters and return any previewable video/lesson.
+      final preview = await _learningRepository.fetchAvailableLessonsPreview(
+        limit: candidatePool,
+      );
+      if (preview.isNotEmpty) {
+        return preview;
+      }
       return combined;
     } catch (e, st) {
       debugPrint('Failed to load direct recommendations candidates: $e\n$st');
-      return const [];
+      try {
+        final preview = await _learningRepository.fetchAvailableLessonsPreview(
+          limit: candidatePool,
+        );
+        return preview;
+      } catch (fallbackError, fallbackStack) {
+        debugPrint('Failed to load preview fallback: $fallbackError\n$fallbackStack');
+        return const [];
+      }
     }
   }
 
@@ -208,41 +221,6 @@ class VideoRecommendationService {
     return lesson.copyWith(videoUrl: publicUrl);
   }
 
-  LessonModel _lessonModelFromVideoRow(Map<String, dynamic> row) {
-    final video = VideoModel.fromJson(row);
-    return LessonModel(
-      id: video.id,
-      title: video.title,
-      description: video.description ?? '',
-      content: '',
-      category: video.topic ?? video.channelTitle ?? 'YouTube',
-      videoUrl: 'yt:${video.youtubeVideoId}',
-      thumbnailUrl: video.thumbnail,
-      durationSeconds: video.durationSeconds,
-      difficultyLevel: 'beginner',
-      format: 'video',
-      minNetworkStrength: 'medium',
-      safeForMotion: false,
-      status: 'approved',
-      isPublished: true,
-      createdAt: video.createdAt,
-    );
-  }
-
-  Future<Map<String, dynamic>> _fetchUserProfile(String userUuid) async {
-    try {
-      final res = await _supabaseClient
-          .from('profiles')
-          .select()
-          .eq('id', userUuid)
-          .maybeSingle();
-      return res is Map<String, dynamic> ? res : <String, dynamic>{};
-    } catch (e, st) {
-      debugPrint('fetchUserProfile error: $e\n$st');
-      return <String, dynamic>{};
-    }
-  }
-
   Future<Map<String, dynamic>> _fetchUserPrefs(String userUuid) async {
     try {
       final res = await _supabaseClient
@@ -257,7 +235,7 @@ class VideoRecommendationService {
     }
   }
 
-  List<String> extractInterestingFields(Map<String, dynamic> prefs, Map<String, dynamic> profile) {
+  List<String> extractInterestingFields(Map<String, dynamic> prefs) {
     final candidates = <dynamic>[
       prefs['interesting_fields'],
       prefs['interests'],
@@ -265,12 +243,6 @@ class VideoRecommendationService {
       prefs['preferences']?['topics'],
       prefs['preferences']?['interests'],
       prefs['preferences']?['interesting_fields'],
-      profile['interesting_fields'],
-      profile['interests'],
-      profile['interesting'],
-      profile['profile_data']?['topics'],
-      profile['profile_data']?['interests'],
-      profile['profile_data']?['interesting_fields'],
     ];
 
     final seen = <String>{};
@@ -291,7 +263,7 @@ class VideoRecommendationService {
           seen.add(value);
         }
       } else if (raw is Map<String, dynamic>) {
-        final nested = extractInterestingFields(raw, const <String, dynamic>{});
+        final nested = extractInterestingFields(raw);
         for (final value in nested) {
           seen.add(value);
         }
@@ -305,7 +277,6 @@ class VideoRecommendationService {
     required Map<String, dynamic> user,
     required List<LessonModel> candidates,
   }) {
-    final age = user['age']?.toString() ?? '';
     final interesting = (user['interesting'] as List<String>? ?? const []).toList();
     final topN = (user['topN'] as int?) ?? 4;
 
@@ -318,16 +289,15 @@ class VideoRecommendationService {
         });
 
     return '''You are a recommender assistant for a microlearning app.
-You will be given a user profile and a list of candidate YouTube videos.
-Your task: select the TOP $topN most relevant videos for the user.
+You will be given a user profile and a list of candidate lessons/videos from the lessons table.
+Your task: select the TOP $topN most relevant lessons for the user.
 
 Rules:
 - Respond ONLY with JSON in this exact format: {"video_ids": ["id1","id2", ...]}
 - video_ids must be chosen from the provided candidates' ids.
-- Prefer videos whose topics/titles/descriptions match the user's interesting fields.
+- Prefer lessons whose categories/titles/descriptions match the user's interesting fields.
 
 User profile:
-- age: ${age.isEmpty ? '(unknown)' : age}
 - interesting_fields: ${jsonEncode(interesting)}
 
 Candidates (JSON array):
@@ -358,16 +328,21 @@ ${jsonEncode(candidateJson)}
       return (v.createdAt?.millisecondsSinceEpoch ?? 0).toInt();
     }
 
-    final hay = '${v.title} ${v.category} ${v.description}'.toLowerCase();
+    final descriptionHay = v.description.toLowerCase();
+    final titleHay = v.title.toLowerCase();
+    final categoryHay = v.category.toLowerCase();
     int score = 0;
 
     for (final token in interesting) {
       final t = token.toLowerCase().trim();
       if (t.isEmpty) continue;
-      if (hay.contains(t)) score += 10;
-      if (v.category.toLowerCase() == t) score += 8;
-      if (v.title.toLowerCase().contains(t)) score += 6;
+      if (descriptionHay.contains(t)) score += 12;
+      if (categoryHay == t) score += 5;
+      if (titleHay.contains(t)) score += 3;
     }
+
+    // Slight recency bias as a tie-breaker, without overpowering content match.
+    score += ((v.createdAt?.millisecondsSinceEpoch ?? 0) ~/ 1000000000);
     return score;
   }
 

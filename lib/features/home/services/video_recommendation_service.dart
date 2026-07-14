@@ -57,71 +57,93 @@ class VideoRecommendationService {
     int topN = 4,
     int candidatePool = 25,
   }) async {
-    // 1) Load user details (age + interesting fields).
-    final userPrefs = await _fetchUserPrefs(userUuid);
-    final interesting = extractInterestingFields(userPrefs);
-
-    // 2) Load candidate videos from the lessons table / existing lesson feed.
-    final candidates = await _loadCandidates(candidatePool);
-
-    if (candidates.isEmpty) return const [];
-
-    // 3) Try Gemini first, but never let that block the home feed.
-    final prompt = _buildRecommendationPrompt(
-      user: {
-        'interesting': interesting,
-        'topN': topN,
-      },
-      candidates: candidates,
-    );
-
-    final byId = {for (final v in candidates) v.id: v};
-    final selected = <LessonModel>[];
-
     try {
-      // Keep history empty for deterministic behavior.
-      final aiText = await _geminiService.generateReply(
-        prompt: prompt,
-        history: const [],
-        timeout: const Duration(seconds: 35),
+      final userPrefs = await _fetchUserPrefs(userUuid);
+      final interesting = extractInterestingFields(userPrefs);
+      final selectedCategories = _extractStringList(
+        userPrefs,
+        const ['selected_categories', 'categories'],
       );
 
-      final pickedIds = _parseIdsFromAi(aiText).take(topN).toSet();
+      final candidates = await _loadCandidates(
+        candidatePool,
+        userUuid: userUuid,
+        selectedCategories: selectedCategories,
+        interestingFields: interesting,
+      );
+      if (candidates.isEmpty) return const [];
 
-      // First, use AI picks.
-      for (final id in pickedIds) {
-        final v = byId[id];
-        if (v == null) continue;
-        selected.add(v);
+      final prompt = _buildRecommendationPrompt(
+        user: {
+          'interesting': interesting,
+          'selectedCategories': selectedCategories,
+          'topN': topN,
+        },
+        candidates: candidates,
+      );
+
+      final byId = {for (final v in candidates) v.id: v};
+      final selected = <LessonModel>[];
+
+      try {
+        final aiText = await _geminiService.generateReply(
+          prompt: prompt,
+          history: const [],
+          timeout: const Duration(seconds: 35),
+        );
+
+        final pickedIds = _parseIdsFromAi(aiText).take(topN).toSet();
+        for (final id in pickedIds) {
+          final v = byId[id];
+          if (v == null) continue;
+          selected.add(v);
+        }
+      } catch (e, st) {
+        debugPrint('Recommendation AI failed, falling back to heuristic ranking: $e\n$st');
       }
+
+      if (selected.length < topN) {
+        final heuristic = candidates.toList()
+          ..sort((a, b) => _scoreCandidate(
+                b,
+                interesting,
+                selectedCategories,
+              ).compareTo(
+                _scoreCandidate(a, interesting, selectedCategories),
+              ));
+        for (final v in heuristic) {
+          if (selected.length >= topN) break;
+          if (selected.any((item) => item.id == v.id)) continue;
+          selected.add(v);
+        }
+      }
+
+      if (selected.isEmpty) {
+        final fallback = candidates.toList()
+          ..sort((a, b) => (b.createdAt?.millisecondsSinceEpoch ?? 0)
+              .compareTo(a.createdAt?.millisecondsSinceEpoch ?? 0));
+        return fallback.take(topN).toList();
+      }
+
+      return selected.take(topN).toList();
     } catch (e, st) {
-      debugPrint('Recommendation AI failed, falling back to heuristic ranking: $e\n$st');
+      debugPrint('recommendForUser error: $e\n$st');
+      return _filterFallback(
+        userUuid: userUuid,
+        topN: topN,
+        candidatePool: candidatePool,
+      );
     }
-
-    // Fallback: if AI returned nothing/invalid, use heuristic ranking.
-    if (selected.length < topN) {
-      final heuristic = candidates.toList()
-        ..sort((a, b) => _scoreCandidate(b, interesting).compareTo(_scoreCandidate(a, interesting)));
-      for (final v in heuristic) {
-        if (selected.length >= topN) break;
-        if (selected.any((item) => item.id == v.id)) continue;
-        selected.add(v);
-      }
-    }
-
-    if (selected.isEmpty) {
-      final fallback = candidates.toList()
-        ..sort((a, b) => (b.createdAt?.millisecondsSinceEpoch ?? 0).compareTo(a.createdAt?.millisecondsSinceEpoch ?? 0));
-      return fallback.take(topN).toList();
-    }
-
-    // Limit.
-    return selected.take(topN).toList();
   }
 
-  Future<List<LessonModel>> _loadCandidates(int candidatePool) async {
-      try {
-        final combined = <LessonModel>[];
+  Future<List<LessonModel>> _loadCandidates(
+    int candidatePool, {
+    required String userUuid,
+    required List<String> selectedCategories,
+    required List<String> interestingFields,
+  }) async {
+    try {
+      final combined = <LessonModel>[];
 
       try {
         final fromRepo = await _learningRepository.getAllLessonItems();
@@ -132,23 +154,33 @@ class VideoRecommendationService {
         debugPrint('Failed to load repository candidates: $e\n$st');
       }
 
-      try {
-        final lessonRows = await _supabaseClient
-            .from('lessons')
-            .select()
-            .eq('status', 'approved')
-            .eq('is_published', true)
-            .order('created_at', ascending: false)
-            .limit(candidatePool);
+      final lessonRows = await _supabaseClient
+          .from('lessons')
+          .select()
+          .eq('status', 'approved')
+          .eq('is_published', true)
+          .order('created_at', ascending: false)
+          .limit(candidatePool * 2);
 
-        combined.addAll(
-          (lessonRows as List<dynamic>)
-              .map((row) => row as Map<String, dynamic>)
-              .map(_lessonModelFromSupabaseRow),
-        );
-      } catch (e, st) {
-        debugPrint('Failed to load lesson candidates: $e\n$st');
-      }
+      final tokens = <String>[
+        ...selectedCategories,
+        ...interestingFields,
+      ].map((e) => e.toLowerCase().trim()).where((e) => e.isNotEmpty).toList();
+
+      combined.addAll(
+        (lessonRows as List<dynamic>)
+            .map((row) => row as Map<String, dynamic>)
+            .map(_lessonModelFromSupabaseRow)
+            .where((lesson) {
+              if (tokens.isEmpty) return true;
+              final haystack = [
+                lesson.title,
+                lesson.category,
+                lesson.description,
+              ].join(' ').toLowerCase();
+              return tokens.any(haystack.contains);
+            }),
+      );
 
       combined
         ..removeWhere((v) => v.id.trim().isEmpty)
@@ -158,23 +190,49 @@ class VideoRecommendationService {
         return combined;
       }
 
-      // Final fallback: ignore filters and return any previewable video/lesson.
-      final preview = await _learningRepository.fetchAvailableLessonsPreview(
-        limit: candidatePool,
-      );
-      if (preview.isNotEmpty) {
-        return preview;
-      }
       return combined;
     } catch (e, st) {
       debugPrint('Failed to load direct recommendations candidates: $e\n$st');
+      return const [];
+    }
+  }
+
+  Future<List<LessonModel>> _filterFallback({
+    required String userUuid,
+    required int topN,
+    required int candidatePool,
+  }) async {
+    try {
+      final userPrefs = await _fetchUserPrefs(userUuid);
+      final interesting = extractInterestingFields(userPrefs);
+      final selectedCategories = _extractStringList(
+        userPrefs,
+        const ['selected_categories', 'categories'],
+      );
+      final candidates = await _loadCandidates(
+        candidatePool,
+        userUuid: userUuid,
+        selectedCategories: selectedCategories,
+        interestingFields: interesting,
+      );
+      if (candidates.isEmpty) {
+        return await _learningRepository.fetchAvailableLessonsPreview(limit: topN);
+      }
+      final sorted = candidates.toList()
+        ..sort((a, b) => _scoreCandidate(
+              b,
+              interesting,
+              selectedCategories,
+            ).compareTo(
+              _scoreCandidate(a, interesting, selectedCategories),
+            ));
+      return sorted.take(topN).toList();
+    } catch (e, st) {
+      debugPrint('filterFallback error: $e\n$st');
       try {
-        final preview = await _learningRepository.fetchAvailableLessonsPreview(
-          limit: candidatePool,
-        );
-        return preview;
+        return await _learningRepository.fetchAvailableLessonsPreview(limit: topN);
       } catch (fallbackError, fallbackStack) {
-        debugPrint('Failed to load preview fallback: $fallbackError\n$fallbackStack');
+        debugPrint('Failed final recommendations fallback: $fallbackError\n$fallbackStack');
         return const [];
       }
     }
@@ -273,6 +331,28 @@ class VideoRecommendationService {
     return seen.toList();
   }
 
+  List<String> _extractStringList(
+    Map<String, dynamic> prefs,
+    List<String> keys,
+  ) {
+    final seen = <String>{};
+    for (final key in keys) {
+      final raw = prefs[key];
+      if (raw is List) {
+        for (final entry in raw) {
+          final value = entry.toString().trim();
+          if (value.isNotEmpty) seen.add(value);
+        }
+      } else if (raw is String) {
+        for (final entry in raw.split(RegExp(r'[,;\n]'))) {
+          final value = entry.trim();
+          if (value.isNotEmpty) seen.add(value);
+        }
+      }
+    }
+    return seen.toList();
+  }
+
   String _buildRecommendationPrompt({
     required Map<String, dynamic> user,
     required List<LessonModel> candidates,
@@ -322,10 +402,21 @@ ${jsonEncode(candidateJson)}
     return regex.allMatches(aiText).map((m) => m.group(1) ?? '').where((s) => s.isNotEmpty);
   }
 
-  int _scoreCandidate(LessonModel v, List<String> interesting) {
+  int _scoreCandidate(
+    LessonModel v,
+    List<String> interesting,
+    List<String> selectedCategories,
+  ) {
     if (interesting.isEmpty) {
       // If no interests, rely on recency-like field.
-      return (v.createdAt?.millisecondsSinceEpoch ?? 0).toInt();
+      var score = (v.createdAt?.millisecondsSinceEpoch ?? 0).toInt();
+      final categoryHay = v.category.toLowerCase();
+      for (final token in selectedCategories) {
+        final t = token.toLowerCase().trim();
+        if (t.isEmpty) continue;
+        if (categoryHay.contains(t)) score += 10;
+      }
+      return score;
     }
 
     final descriptionHay = v.description.toLowerCase();
@@ -339,6 +430,12 @@ ${jsonEncode(candidateJson)}
       if (descriptionHay.contains(t)) score += 12;
       if (categoryHay == t) score += 5;
       if (titleHay.contains(t)) score += 3;
+    }
+
+    for (final token in selectedCategories) {
+      final t = token.toLowerCase().trim();
+      if (t.isEmpty) continue;
+      if (categoryHay.contains(t)) score += 8;
     }
 
     // Slight recency bias as a tie-breaker, without overpowering content match.

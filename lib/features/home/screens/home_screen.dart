@@ -314,60 +314,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  void _showRecommendationSheet(String title) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD1D1D6),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                ListTile(
-                  leading: const Icon(Icons.block_rounded),
-                  title: const Text('Mark as not interested'),
-                  onTap: () => Navigator.pop(context),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.feedback_outlined),
-                  title: const Text('Send a feedback'),
-                  onTap: () => Navigator.pop(context),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.report_outlined),
-                  title: const Text('Report'),
-                  onTap: () => Navigator.pop(context),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textSecondaryLight,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   String _greeting() {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning';
@@ -564,7 +510,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _SectionHeaderRow(
-                          title: 'Recommended For You',
+                          title: 'Recommend For You',
                           actionLabel: 'More',
                           onTapAction: _openLessons,
                         ),
@@ -602,7 +548,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               );
                               return const _RecommendationEmptyState(
                                 message:
-                                    'We could not load recommendations right now.',
+                                    'We are preparing recommendations for you.',
                               );
                             },
                             data: (items) {
@@ -629,8 +575,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   return _RecommendedVideoRow(
                                     item: item,
                                     onTap: () => _openRecommendedVideo(item),
-                                    onMore: () =>
-                                        _showRecommendationSheet(item.title),
                                   );
                                 },
                               );
@@ -1125,12 +1069,10 @@ class _RecommendedVideoRow extends StatelessWidget {
   final LessonModel item;
 
   final VoidCallback onTap;
-  final VoidCallback onMore;
 
   const _RecommendedVideoRow({
     required this.item,
     required this.onTap,
-    required this.onMore,
   });
 
   @override
@@ -1146,6 +1088,7 @@ class _RecommendedVideoRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
         child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: AppColors.surfaceFor(brightness),
             borderRadius: BorderRadius.circular(AppDimensions.cardRadiusMd),
@@ -1154,89 +1097,72 @@ class _RecommendedVideoRow extends StatelessWidget {
                   AppColors.textSecondaryFor(brightness).withValues(alpha: 0.08),
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 68,
-                    height: 68,
-                    child: item.thumbnailUrl != null &&
-                            item.thumbnailUrl!.isNotEmpty
-                        ? Image.network(
-                            item.thumbnailUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _recommendationThumbFallback(brightness),
-                          )
-                        : _recommendationThumbFallback(brightness),
-                  ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryFor(brightness)
+                      .withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        category,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryFor(brightness),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimaryFor(brightness),
-                          height: 1.18,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondaryFor(brightness),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Icon(
+                child: Icon(
                   Icons.play_circle_fill_rounded,
                   color: AppColors.primaryFor(brightness),
-                  size: 28,
+                  size: 24,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      category,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryFor(brightness),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimaryFor(brightness),
+                        height: 1.18,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondaryFor(brightness),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textSecondaryFor(brightness),
+                size: 24,
+              ),
+            ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _recommendationThumbFallback(Brightness brightness) {
-    return Container(
-      color: AppColors.surfaceFor(brightness),
-      child: Center(
-        child: Icon(
-          Icons.play_circle_fill_rounded,
-          size: 40,
-          color: AppColors.textSecondaryFor(brightness),
         ),
       ),
     );

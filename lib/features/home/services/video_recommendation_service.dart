@@ -64,12 +64,24 @@ class VideoRecommendationService {
         userPrefs,
         const ['selected_categories', 'categories'],
       );
+      final age = (userPrefs['age'] as num?)?.toInt();
+      final educationStatus = userPrefs['education_status']?.toString();
+      final recentWatched = await _learningRepository.fetchUserRecentLearningRecords(
+        userUuid: userUuid,
+        limit: 5,
+      );
+      final watchedTitles = recentWatched
+          .map((row) => row['title']?.toString())
+          .whereType<String>()
+          .toList();
 
       final candidates = await _loadCandidates(
         candidatePool,
         userUuid: userUuid,
         selectedCategories: selectedCategories,
         interestingFields: interesting,
+        age: age,
+        educationStatus: educationStatus,
       );
       if (candidates.isEmpty) return const [];
 
@@ -77,6 +89,9 @@ class VideoRecommendationService {
         user: {
           'interesting': interesting,
           'selectedCategories': selectedCategories,
+          'age': age,
+          'educationStatus': educationStatus,
+          'watchedTitles': watchedTitles,
           'topN': topN,
         },
         candidates: candidates,
@@ -108,8 +123,10 @@ class VideoRecommendationService {
                 b,
                 interesting,
                 selectedCategories,
+                age,
+                educationStatus,
               ).compareTo(
-                _scoreCandidate(a, interesting, selectedCategories),
+                _scoreCandidate(a, interesting, selectedCategories, age, educationStatus),
               ));
         for (final v in heuristic) {
           if (selected.length >= topN) break;
@@ -141,6 +158,8 @@ class VideoRecommendationService {
     required String userUuid,
     required List<String> selectedCategories,
     required List<String> interestingFields,
+    int? age,
+    String? educationStatus,
   }) async {
     try {
       final combined = <LessonModel>[];
@@ -184,7 +203,15 @@ class VideoRecommendationService {
 
       combined
         ..removeWhere((v) => v.id.trim().isEmpty)
-        ..shuffle();
+        ..sort((a, b) => _scoreCandidate(
+              b,
+              interestingFields,
+              selectedCategories,
+              age,
+              educationStatus,
+            ).compareTo(
+              _scoreCandidate(a, interestingFields, selectedCategories, age, educationStatus),
+            ));
 
       if (combined.isNotEmpty) {
         return combined;
@@ -209,11 +236,15 @@ class VideoRecommendationService {
         userPrefs,
         const ['selected_categories', 'categories'],
       );
+      final age = (userPrefs['age'] as num?)?.toInt();
+      final educationStatus = userPrefs['education_status']?.toString();
       final candidates = await _loadCandidates(
         candidatePool,
         userUuid: userUuid,
         selectedCategories: selectedCategories,
         interestingFields: interesting,
+        age: age,
+        educationStatus: educationStatus,
       );
       if (candidates.isEmpty) {
         return await _learningRepository.fetchAvailableLessonsPreview(limit: topN);
@@ -223,8 +254,10 @@ class VideoRecommendationService {
               b,
               interesting,
               selectedCategories,
+              age,
+              educationStatus,
             ).compareTo(
-              _scoreCandidate(a, interesting, selectedCategories),
+              _scoreCandidate(a, interesting, selectedCategories, age, educationStatus),
             ));
       return sorted.take(topN).toList();
     } catch (e, st) {
@@ -359,6 +392,9 @@ class VideoRecommendationService {
   }) {
     final interesting = (user['interesting'] as List<String>? ?? const []).toList();
     final topN = (user['topN'] as int?) ?? 4;
+    final age = user['age'];
+    final educationStatus = user['educationStatus']?.toString() ?? '';
+    final watchedTitles = (user['watchedTitles'] as List<String>? ?? const []).toList();
 
     final candidateJson = candidates.map((v) => {
           'id': v.id,
@@ -379,6 +415,9 @@ Rules:
 
 User profile:
 - interesting_fields: ${jsonEncode(interesting)}
+- age: ${age ?? 'unknown'}
+- education_status: $educationStatus
+- watched_history: ${jsonEncode(watchedTitles)}
 
 Candidates (JSON array):
 ${jsonEncode(candidateJson)}
@@ -406,6 +445,8 @@ ${jsonEncode(candidateJson)}
     LessonModel v,
     List<String> interesting,
     List<String> selectedCategories,
+    int? age,
+    String? educationStatus,
   ) {
     if (interesting.isEmpty) {
       // If no interests, rely on recency-like field.
@@ -437,6 +478,21 @@ ${jsonEncode(candidateJson)}
       if (t.isEmpty) continue;
       if (categoryHay.contains(t)) score += 8;
     }
+
+    final role = (educationStatus ?? '').toLowerCase();
+    final difficulty = v.difficultyLevel.toLowerCase();
+    if (age != null) {
+      if (age < 18 && difficulty.contains('beginner')) score += 6;
+      if (age >= 18 && age < 23 && role.contains('undergraduate')) {
+        if (difficulty.contains('medium') || difficulty.contains('beginner')) score += 8;
+      }
+      if (age >= 23 && role.contains('working')) {
+        if (difficulty.contains('medium') || difficulty.contains('hard')) score += 8;
+      }
+    }
+    if (role.contains('school') && difficulty.contains('beginner')) score += 5;
+    if (role.contains('undergraduate') && (difficulty.contains('medium') || difficulty.contains('hard'))) score += 5;
+    if (role.contains('working_professional') && difficulty.contains('hard')) score += 5;
 
     // Slight recency bias as a tie-breaker, without overpowering content match.
     score += ((v.createdAt?.millisecondsSinceEpoch ?? 0) ~/ 1000000000);

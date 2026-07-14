@@ -35,10 +35,14 @@ class VideoUploadResult {
 class LearningPreferencesResult {
   final List<String> availableCategories;
   final List<String> selectedCategories;
+  final int? age;
+  final String? educationStatus;
 
   const LearningPreferencesResult({
     required this.availableCategories,
     required this.selectedCategories,
+    this.age,
+    this.educationStatus,
   });
 }
 
@@ -56,7 +60,7 @@ class LearningRepository {
     try {
       final prefsRow = await _supabase
           .from('user_preferences')
-          .select('selected_categories')
+          .select('selected_categories, age, education_status')
           .eq('user_id', userUuid)
           .maybeSingle();
 
@@ -82,6 +86,8 @@ class LearningRepository {
       return LearningPreferencesResult(
         availableCategories: categories.toList()..sort(),
         selectedCategories: selected,
+        age: (prefsRow?['age'] as num?)?.toInt(),
+        educationStatus: prefsRow?['education_status']?.toString(),
       );
     } catch (e) {
       debugPrint('fetchLearningPreferences error: $e');
@@ -89,6 +95,23 @@ class LearningRepository {
         availableCategories: [],
         selectedCategories: [],
       );
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchUserLearningContext({
+    required String userUuid,
+  }) async {
+    try {
+      final prefsRow = await _supabase
+          .from('user_preferences')
+          .select('age, education_status, selected_categories')
+          .eq('user_id', userUuid)
+          .maybeSingle();
+
+      return prefsRow ?? <String, dynamic>{};
+    } catch (e) {
+      debugPrint('fetchUserLearningContext error: $e');
+      return <String, dynamic>{};
     }
   }
 
@@ -488,6 +511,86 @@ class LearningRepository {
 
     } catch (e, st) {
       debugPrint('logLessonCompletion error: $e\n$st');
+    }
+  }
+
+  Future<LessonModel?> fetchMostRecentWatchedLesson({
+    required String userUuid,
+  }) async {
+    try {
+      final progress = await _supabase
+          .from('user_progress')
+          .select('lesson_id,last_accessed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true)
+          .order('last_accessed', ascending: false)
+          .limit(1);
+
+      final rows = progress as List<dynamic>;
+      if (rows.isEmpty) return null;
+
+      final lessonId = (rows.first as Map<String, dynamic>)['lesson_id']?.toString();
+      if (lessonId == null || lessonId.isEmpty) return null;
+      return getLessonById(lessonId);
+    } catch (e, st) {
+      debugPrint('fetchMostRecentWatchedLesson error: $e\n$st');
+      return null;
+    }
+  }
+
+  Future<List<String>> fetchUserWatchedLessonTitles({
+    required String userUuid,
+    int limit = 50,
+  }) async {
+    try {
+      final progress = await _supabase
+          .from('user_progress')
+          .select('lesson_id,last_accessed')
+          .eq('user_id', userUuid)
+          .eq('is_completed', true)
+          .order('last_accessed', ascending: false)
+          .limit(limit * 2);
+
+      final progressList = progress as List<dynamic>;
+      final lessonIds = progressList
+          .map((e) => (e as Map<String, dynamic>)['lesson_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (lessonIds.isEmpty) return [];
+
+      final lessons = await _supabase
+          .from('lessons')
+          .select('id,title')
+          .inFilter('id', lessonIds);
+
+      final lessonById = <String, String>{};
+      for (final rowAny in (lessons as List<dynamic>)) {
+        final row = rowAny as Map<String, dynamic>;
+        final id = row['id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        lessonById[id] = row['title']?.toString() ?? 'Untitled';
+      }
+
+      final titles = <String>[];
+      final seen = <String>{};
+      for (final rowAny in progressList) {
+        final row = rowAny as Map<String, dynamic>;
+        final lessonId = row['lesson_id']?.toString();
+        if (lessonId == null || lessonId.isEmpty || seen.contains(lessonId)) continue;
+        final title = lessonById[lessonId];
+        if (title == null || title.trim().isEmpty) continue;
+        titles.add(title.trim());
+        seen.add(lessonId);
+        if (titles.length >= limit) break;
+      }
+
+      return titles;
+    } catch (e, st) {
+      debugPrint('fetchUserWatchedLessonTitles error: $e\n$st');
+      return [];
     }
   }
 
@@ -1245,17 +1348,21 @@ class LearningRepository {
     required String userUuid,
     required UserContextState ambientContext,
   }) async {
+    int? age;
+    String? educationStatus;
     // Fetch the user's selected learning categories to scope recommendations.
     List<String> categories = [];
     try {
       final prefsRow = await _supabase
           .from('user_preferences')
-          .select('selected_categories')
+          .select('selected_categories, age, education_status')
           .eq('user_id', userUuid)
           .maybeSingle();
       categories =
           (prefsRow?['selected_categories'] as List<dynamic>?)?.cast<String>() ??
               [];
+      age = (prefsRow?['age'] as num?)?.toInt();
+      educationStatus = prefsRow?['education_status']?.toString();
     } catch (e) {
       debugPrint('Failed to load user categories for feed filtering: $e');
     }
@@ -1287,7 +1394,21 @@ class LearningRepository {
     final ytAsLessons = results[1];
 
     final combined = [...lessons, ...ytAsLessons];
-    combined.shuffle();
+    combined.sort((a, b) => _scoreFeedItem(
+          b,
+          categories: categories,
+          age: age,
+          educationStatus: educationStatus,
+          ambientContext: ambientContext,
+        ).compareTo(
+          _scoreFeedItem(
+            a,
+            categories: categories,
+            age: age,
+            educationStatus: educationStatus,
+            ambientContext: ambientContext,
+          ),
+        ));
 
     final fresh = combined.where((lesson) => !_shownFeedIds.contains(lesson.id)).toList();
     final page = fresh.isNotEmpty ? fresh : combined;
@@ -1297,6 +1418,60 @@ class LearningRepository {
     }
 
     return page.take(20).toList();
+  }
+
+  int _scoreFeedItem(
+    LessonModel lesson, {
+    required List<String> categories,
+    int? age,
+    String? educationStatus,
+    required UserContextState ambientContext,
+  }) {
+    int score = 0;
+    final categoryHay = lesson.category.toLowerCase();
+    final titleHay = lesson.title.toLowerCase();
+    final descriptionHay = lesson.description.toLowerCase();
+    final role = (educationStatus ?? '').toLowerCase();
+    final difficulty = lesson.difficultyLevel.toLowerCase();
+
+    for (final token in categories) {
+      final t = token.toLowerCase().trim();
+      if (t.isEmpty) continue;
+      if (categoryHay.contains(t) || titleHay.contains(t) || descriptionHay.contains(t)) {
+        score += 12;
+      }
+    }
+
+    if (age != null) {
+      if (age < 18 && difficulty.contains('beginner')) score += 6;
+      if (age >= 18 && age < 23 && role.contains('undergraduate')) {
+        if (difficulty.contains('beginner') || difficulty.contains('medium')) score += 8;
+      }
+      if (age >= 23 && role.contains('working')) {
+        if (difficulty.contains('medium') || difficulty.contains('hard')) score += 8;
+      }
+    }
+
+    if (role.contains('school') && difficulty.contains('beginner')) score += 5;
+    if (role.contains('undergraduate') && (difficulty.contains('medium') || difficulty.contains('hard'))) score += 5;
+    if (role.contains('working_professional') && difficulty.contains('hard')) score += 5;
+
+    switch (ambientContext.networkStrength) {
+      case AppNetworkStrength.weak:
+        if (lesson.minNetworkStrength == 'weak') score += 12;
+        if (lesson.format == 'video') score += 2;
+        break;
+      case AppNetworkStrength.medium:
+        if (lesson.minNetworkStrength == 'weak' || lesson.minNetworkStrength == 'medium') score += 10;
+        break;
+      case AppNetworkStrength.strong:
+        score += 3;
+        break;
+    }
+
+    if (lesson.safeForMotion) score += ambientContext.isInMotion ? 6 : 2;
+    score += (lesson.createdAt?.millisecondsSinceEpoch ?? 0) ~/ 1000000000;
+    return score;
   }
 
   /// Fetches approved, published lessons from `public.lessons`.

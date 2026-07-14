@@ -9,7 +9,6 @@ import '../../../core/services/session_manager.dart';
 import '../../../features/feed/controllers/feed_providers.dart';
 import '../../lessons/screens/lesson_detail_screen.dart';
 import '../../quiz/screens/quiz_play_screen.dart';
-import '../../quiz/screens/quiz_lesson_picker_sheet.dart';
 import '../services/video_recommendation_service.dart';
 import '../../learning/models/lesson_model.dart';
 import '../../learning/repositories/xp_calculation.dart';
@@ -341,6 +340,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _openLessons() => widget.onOpenLessons();
 
+  Future<void> _openQuizFromHistory() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final repo = LearningRepository(Supabase.instance.client);
+    final titles = await repo.fetchUserWatchedLessonTitles(userUuid: user.id);
+    if (!mounted) return;
+
+    if (titles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Watch a few lessons first to unlock your quiz.')),
+      );
+      return;
+    }
+
+    final lesson = _buildHistoryQuizLesson(titles);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => QuizPlayScreen(lesson: lesson),
+      ),
+    );
+  }
+
+  LessonModel _buildHistoryQuizLesson(List<String> watchedTitles) {
+    final joined = watchedTitles.take(12).join(' • ');
+    return LessonModel(
+      id: 'history-quiz-${Supabase.instance.client.auth.currentUser?.id ?? 'guest'}',
+      title: 'Quiz',
+      description: 'Quiz based on your watched lessons.',
+      content: 'Watched lessons: $joined',
+      category: 'Quiz',
+      videoUrl: null,
+      thumbnailUrl: null,
+      durationSeconds: null,
+      difficultyLevel: 'medium',
+      format: 'quiz',
+      minNetworkStrength: 'weak',
+      safeForMotion: true,
+      status: 'approved',
+      isPublished: true,
+      createdAt: DateTime.now(),
+    );
+  }
+
   void _openRecommendedVideo(LessonModel item) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -624,15 +667,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _SectionTitle(
-                          title: 'Quiz',
-                        ),
+                        _SectionTitle(title: 'Quiz'),
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color:
-                                const Color(0xFF5B5FEF).withValues(alpha: 0.10),
+                            color: const Color(0xFF5B5FEF).withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
@@ -644,83 +684,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   color: const Color(0xFF5B5FEF),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(
-                                  Icons.quiz_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
+                                child: const Icon(Icons.quiz_rounded, color: Colors.white, size: 22),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Builder(
-                                  builder: (context) {
-                                    final isDark =
-                                        Theme.of(context).brightness ==
-                                            Brightness.dark;
-                                    return Text(
-                                      'Ready for a quick quiz?',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.textPrimaryFor(
-                                          isDark
-                                              ? Brightness.dark
-                                              : Brightness.light,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                child: Text(
+                                  'Are you ready?',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textPrimaryFor(
+                                      isDark ? Brightness.dark : Brightness.light,
+                                    ),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 10),
                               InkWell(
-                                onTap: () async {
-                                  final isDarkTheme =
-                                      Theme.of(context).brightness ==
-                                          Brightness.dark;
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    // The sheet's own Material must be
-                                    // transparent so our rounded Container
-                                    // below can show through with its own
-                                    // corners — but that Container is what
-                                    // actually paints the opaque background,
-                                    // otherwise the sheet content floats over
-                                    // whatever is behind it with no backing.
-                                    backgroundColor: Colors.transparent,
-                                    builder: (ctx) {
-                                      return FractionallySizedBox(
-                                        heightFactor: 0.7,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: isDarkTheme
-                                                ? AppColors.surfaceDark
-                                                : Colors.white,
-                                            borderRadius:
-                                                const BorderRadius.vertical(
-                                              top: Radius.circular(24),
-                                            ),
-                                          ),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: QuizLessonPickerSheet(
-                                            onPicked: (lesson) {
-                                              Navigator.of(ctx).pop();
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      QuizPlayScreen(
-                                                    lesson: lesson,
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
+                                onTap: _openQuizFromHistory,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,

@@ -4,13 +4,17 @@ class QuizPromptBuilder {
   String build({
     required LessonModel lesson,
     required int questionCount,
+    Map<String, dynamic>? userContext,
   }) {
     final difficulty = lesson.difficultyLevel.toLowerCase().trim();
+    final age = userContext?['age'];
+    final educationStatus = userContext?['education_status']?.toString() ?? '';
+    final watchedHistory = (userContext?['watched_history'] as List<String>? ?? const <String>[]);
 
     return '''
 You are generating a quiz for an educational app.
 
-Use only the lesson context below.
+Use only the lesson context and the user's watched history below.
 
 Lesson title:
 ${lesson.title}
@@ -26,6 +30,13 @@ $difficulty
 
 Lesson content:
 ${lesson.content}
+
+User profile:
+- age: ${age ?? 'unknown'}
+- education status: $educationStatus
+
+Watched history:
+${watchedHistory.isEmpty ? '- none provided' : watchedHistory.map((e) => '- $e').join('\n')}
 
 Generate a quiz that follows these rules:
 - Return STRICT JSON only.

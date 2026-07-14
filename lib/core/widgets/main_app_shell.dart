@@ -29,6 +29,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
           HomeScreen(
             onOpenLessons: () => setState(() => _currentTab = AppTab.lessons),
             onOpenProfileTab: () => setState(() => _currentTab = AppTab.profile),
+            isActive: _currentTab == AppTab.home,
           ),
           // AppTab.lessons
           MainSwipeFeedScreen(isTabActive: _currentTab == AppTab.lessons),

@@ -24,11 +24,13 @@ final videoRecommendationAsyncProvider =
 class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback onOpenLessons;
   final VoidCallback onOpenProfileTab;
+  final bool isActive;
 
   const HomeScreen({
     super.key,
     required this.onOpenLessons,
     required this.onOpenProfileTab,
+    required this.isActive,
   });
 
   @override
@@ -51,6 +53,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _loadProfile();
     _loadRecentSearches();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _reloadHome();
+    }
   }
 
   @override
@@ -114,6 +124,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _recentSearches = cached;
       _loadingSearches = false;
     });
+  }
+
+  Future<void> _reloadHome() async {
+    setState(() {
+      _loadingSearches = true;
+    });
+
+    final userAsync = ref.read(sessionUserProvider);
+    final user = userAsync.asData?.value;
+    if (user != null) {
+      ref.invalidate(videoRecommendationAsyncProvider(user.id));
+    }
+
+    try {
+      await Future.wait([
+        _loadProfile(),
+        _loadRecentSearches(),
+      ]);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingSearches = false;
+        });
+      }
+    }
   }
 
   Future<void> _persistRecentSearches() async {
@@ -710,8 +745,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                   ),
-              const SizedBox(height: 4),
-              const _XpProgressCard(),
+                  const SizedBox(height: 4),
+                  const _XpProgressCard(),
 
                 ],
               ),
